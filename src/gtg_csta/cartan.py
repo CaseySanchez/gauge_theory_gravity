@@ -73,3 +73,26 @@ def frw(a=lambda t: t ** (2.0 / 3.0)):
 def static_lapse(N=lambda x: 1.0 + 0.3 * jnp.sin(x[1]) * jnp.cos(x[2]) + 0.1 * x[3] ** 2):
     """e^0 = N(x) dt, e^i = dx^i: generically non-conformally-flat, non-vacuum."""
     return coframe_field(lambda x: jnp.diag(jnp.array([N(x), 1.0, 1.0, 1.0])))
+
+
+# ---------------- time-dependent test geometries ----------------
+
+def boosted(coframe_matrix_fn, v: float):
+    """The same geometry moving with velocity v along +x: lab coordinates x, rest-frame coordinates y = L x
+    (a boost in the t-x plane), coframe e'^a_nu(x) = e^a_mu(L x) L^mu_nu.  Takes and returns matrix functions
+    (x4 -> (4,4))."""
+    g = 1.0 / jnp.sqrt(1.0 - v * v)
+    L = jnp.eye(4).at[0, 0].set(g).at[0, 1].set(-g * v).at[1, 0].set(-g * v).at[1, 1].set(g)
+    return lambda x: coframe_matrix_fn(L @ x) @ L
+
+
+def pg_matrix(M_of_t):
+    """Painleve-Gullstrand coframe matrix with a mass M(t) that may depend on time:
+    e^0 = dt, e^i = dx^i + sqrt(2 M(t)/r) x^i/r dt.  With constant M this is Schwarzschild (vacuum); with M(t)
+    varying it is a valid torsion-free geometry with matter (a toy, not Vaidya)."""
+    def matrix(x):
+        r = jnp.sqrt(x[1] ** 2 + x[2] ** 2 + x[3] ** 2)
+        beta = jnp.sqrt(2.0 * M_of_t(x[0]) / r) * x[1:] / r
+        e = jnp.zeros((4, 4)).at[0, 0].set(1.0)
+        return e.at[1:, 0].set(beta).at[1:, 1:].set(jnp.eye(3))
+    return matrix

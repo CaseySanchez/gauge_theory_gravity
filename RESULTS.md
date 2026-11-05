@@ -97,3 +97,13 @@ Derived (not stated in spec) and now pinned numerically:
 * Rays that reach r < 2.2M when traced backward are classed black: in the PG chart, a backward ray hugging the horizon is continued onto an unphysical branch and returns to large r, which produced spurious speckle inside the shadow in the first version of this render (fixed).
 * The first versions of the holonomy map and lensing image were wrong (as reported when they were made). Causes: (i) `jax.jit(jax.vmap(holonomy_loop))` returns wrong values for batches of more than about 16 points while `jax.vmap` without `jit`, `jax.lax.map` and single-point calls agree with each other (reproduced with the array and the extensor transport alike; the map now uses `lax.map`); I did not establish whether the fault is in numga, JAX or XLA. (ii) The camera lay in the disk plane, and the horizon speckle above.
 * Not done: Kerr (frame dragging); no redshift/beaming; the disk is a plain colour ramp in radius.
+
+## ParaView export of spacetime slices (`src/gtg_csta/export.py`)
+
+Implemented, **not run**: the simulation itself (evaluating the fields on a 3D grid for each time step) has not been executed.
+* Format: VTKHDF ImageData, one `.vtkhdf` file per time step plus a `<stem>.vtkhdf.series` JSON that ParaView reads as a time series. Needs `h5py` (writer) and, for the tests, `vtk`.
+* Verified: the writer's layout, by reading files back with VTK's own `vtkHDFReader` (point ordering for scalars, 3-vectors and `uint8`, dimensions, origin and spacing), `tests/test_export.py`. ParaView itself was not opened.
+* Written but not executed: the field evaluator and the slow test `-m slow` on a 3×3×3 grid (`pytest -m slow tests/test_export.py`).
+* Geometries: `flyby` (Schwarzschild boosted to v=0.6, a vacuum solution; its Weyl²/2 is the boosted r⁻⁶ profile, Cotton and Ricci vanish) and `growing_mass` (PG form with M(t) from 1 to 2, a toy with matter, so the Cotton sector switches on while the mass changes).
+* Fields per step: ½C² (normal connection), ½Riem² (Lorentz-only), R, magnitudes of the sectors M/P/K/D of the normal connection's curvature, the translation-sector shift vector, log10 versions of the invariants, and a validity mask.
+* Cost, from a timing of 4000 points on CPU with `jit(vmap)`: about 0.65 ms/point, i.e. about 70 s per frame at n = 48 (110k points), about 20 min for 16 frames. Run: `PYTHONPATH=src python -m gtg_csta.export flyby --n 48 --frames 16`.

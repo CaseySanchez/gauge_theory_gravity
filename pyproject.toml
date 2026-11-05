@@ -1,3 +1,5 @@
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = ["slow: compiles the full curvature chain; run explicitly with -m slow"]
+addopts = "-m 'not slow'"
