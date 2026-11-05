@@ -1,8 +1,31 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (59 tests, ~2 min). Demos:
-`cd src && python -m gtg_csta.examples.scenarios` (figures in `output/`).
+All checks below are executable: `source .venv/bin/activate && pytest` (121 tests, ~3.5 min). Demos:
+`cd src && python -m gtg_csta.examples.scenarios` and `python -m gtg_csta.examples.render` (figures in `output/`).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
+
+## Implementation: extensors, with an independent array reference
+
+The package is written with numga extensors (`src/gtg_csta/`). The first implementation used raw coefficient
+arrays and `einsum`; it is kept as `src/gtg_csta/_array/` and used as an independent oracle
+(`tests/array_reference/`, and cross-checks in the main tests). Statements below were first verified with the
+array version and re-verified on the extensor version; the two agree to 1e-12 or better.
+
+What is an extensor now:
+* Connection Ω : `Bivector <- Spacetime` (`Spacetime` = the 4-direction subspace of the 6 vectors); `Omega(a)` is binding.
+* Curvature F : `Bivector <- (Spacetime, Spacetime)` = `swap(dΩ) - dΩ + Ω.commutator(Ω)`, with `dΩ = derivative(Ω)(x)`
+  from numga's JAX `derivative` (a map with one more input, the step) and numga's `commutator` (= [,]/2, exactly the spec's ½[Ω,Ω]).
+  Bianchi uses a small `permute_inputs` helper (numga has no axis permutation for multilinear maps).
+* Gauge transformation `V >> Omega` (sandwich of a map's output) minus `2 dV ~V`; covariant derivative `dPsi + ½ Omega * Psi`.
+* The sector split M/P/K/D is four extensor projectors `Bivector <- Bivector` built from the null basis by
+  contractions and wedges (no 15x15 matrix); the connection is `Ω_L + e ^ n_∞ + f ^ n_o + b (n_o ^ n_∞)`.
+* Coframe `Spacetime <- Spacetime`, metric `g = e | e`, frame `E = e.inverse()`, Christoffel from `derivative(g)`,
+  spin connection `Omega = ½ (W * (S ^ S)).contract(1,4).contract(2,3)` (two metric contractions), Ricci as a
+  contraction `(S | F(E, S)).contract(1,2)`, Schouten from it, the quadratic density by two `.contract`s.
+* Still raw arrays: the `GEN` matrix (generator <-> blade coordinates, used only to *specify* test connections and in
+  the structure-constant test), the 16-unknown least-squares for the normal conditions (`jax.jacfwd` + `lstsq`,
+  assembled from extensor residuals), the Gauss-point scan over transport steps (a `lax.scan` on kernels), and the
+  ray tracer's Hamiltonian flow. Nothing in numga's linear-algebra extensions (`solve`, `lstsq`, `eigh`) was needed except `inverse`.
 
 ## Verified (Tier A, spec sections 2-8)
 
@@ -65,3 +88,12 @@ Derived (not stated in spec) and now pinned numerically:
 
 * All formulas stated in sections 4-8 are mutually consistent as written (checked numerically, including all factors of ½).
 * The only convention that needed pinning down was the holonomy orientation sign above, and the normalisation of P (translation by 2c per unit coefficient) and D (scale e^{−2λ}), both due to the ½ in the spin-representation sandwich.
+
+## Renderings (`src/gtg_csta/examples/render.py`, figures `output/render_*.png`)
+
+* **Field-strength slice** (`render_slices.png`): the gauge-invariant `<F F~>` on a plane through the hole, agrees with 24M²/r⁶ to 1e-11 down to r≈0.4; it diverges toward the singularity, with the horizon (r=2M) unremarkable in PG coordinates. The translation-sector shift √(2M/r) is shown as a gauge-dependent comparison.
+* **Holonomy map** (`render_holonomy.png`): max |T_loop − 1| for 0.4×0.4 loops of the full conformal connection (coframe + Lorentz), ≈ ε²·curvature, from 1e-4 at r=8 to O(1) at the centre.
+* **Lensed image** (`render_lensing.png`): backward null-geodesic ray tracing (Hamiltonian flow of the metric `e | e`) of a thin disk (r = 6–14M) and a checkered sky from a static camera at r=30M, 20° above the disk plane. Validation: the measured shadow angular radius is 0.1670 rad against the analytic 0.1681 (static observer, sin α = (3√3 M/D)√(1−2M/D)), 0.65% low at 160×120 pixels. It shows the shadow, the direct disk below and the lensed secondary image arching over the top.
+* Rays that reach r < 2.2M when traced backward are classed black: in the PG chart, a backward ray hugging the horizon is continued onto an unphysical branch and returns to large r, which produced spurious speckle inside the shadow in the first version of this render (fixed).
+* The first versions of the holonomy map and lensing image were wrong (as reported when they were made). Causes: (i) `jax.jit(jax.vmap(holonomy_loop))` returns wrong values for batches of more than about 16 points while `jax.vmap` without `jit`, `jax.lax.map` and single-point calls agree with each other (reproduced with the array and the extensor transport alike; the map now uses `lax.map`); I did not establish whether the fault is in numga, JAX or XLA. (ii) The camera lay in the disk plane, and the horizon speckle above.
+* Not done: Kerr (frame dragging); no redshift/beaming; the disk is a plain colour ramp in radius.

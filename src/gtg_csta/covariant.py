@@ -1,14 +1,14 @@
-"""Covariant derivative (spec section 6)."""
+"""Covariant derivative (spec section 6), on extensors."""
 from __future__ import annotations
 
-from .fields import biv, even, partials
+from .fields import get_derivative
 
 
 def covariant_derivative(omega, Psi, method: str = "jax", h: float = 1e-4):
-    """D_mu Psi = d_mu Psi + 1/2 Omega_mu Psi.  Returns x -> (4, 32) even coefficients."""
-    dPsi = partials(Psi, method, h)
+    """D Psi = grad Psi + 1/2 Omega Psi : the map Even <- Spacetime, D_a Psi on direction a.
+    `omega(x) * Psi(x)` is the map a -> Omega(a) Psi."""
+    dPsi = get_derivative(method, h)(Psi)
 
     def D(x):
-        return (even(dPsi(x)) + 0.5 * biv(omega(x)) * even(Psi(x))).kernel
-
+        return dPsi(x) + 0.5 * (omega(x) * Psi(x))
     return D

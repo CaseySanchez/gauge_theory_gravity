@@ -83,3 +83,55 @@ def structure_constants() -> np.ndarray:
 
 def scalar(a) -> float:
     return float(np.asarray(a.kernel).reshape(-1)[0])
+
+
+# ---------------------------------------------------------------------------------------------
+# Extensor types.  Everything downstream is written in terms of these.
+# ---------------------------------------------------------------------------------------------
+from numga.gatype import Orientation  # noqa: E402
+
+_EXT = Orientation.extrinsic
+CTX = mv.context
+Scalar = ALG.gatype.scalar()
+Vector = ALG.gatype.vector()                      # all six directions
+Bivector = ALG.gatype.bivector()                  # the 15 generators of so(2,4)
+Even = ALG.gatype.even()                          # Spin(2,4) lives here
+Spacetime = ALG.gatype(ALG.subspace.from_blades("t x y z"), orientation=_EXT)          # the 4 directions a, x
+SpacetimeBivector = ALG.gatype(ALG.subspace.from_blades("tx ty tz xy xz yz"), orientation=_EXT)   # Lorentz sector
+ConnectionType = ALG.gatype((Bivector, Spacetime))                   # Omega: Bivector <- Spacetime
+CurvatureType = ALG.gatype((Bivector, Spacetime, Spacetime))         # F: Bivector <- (Spacetime, Spacetime)
+
+
+def point(x4):
+    """A spacetime position / direction (4 coefficients t,x,y,z) as an extensor."""
+    return CTX.extensor(Spacetime, jnp.asarray(x4))
+
+
+def connection_from_columns(cols):
+    """Omega from its values on the coordinate vectors: cols (4, 15) blade coefficients -> Bivector <- Spacetime."""
+    return CTX.extensor(ConnectionType, jnp.asarray(cols).T)
+
+
+def connection_columns(Omega):
+    """(4, 15) blade coefficients of Omega(e_mu), mu = t,x,y,z."""
+    return jnp.asarray(Omega.kernel).T
+
+
+# ----- sector projectors (Bivector <- Bivector), built from the null basis -----
+# B = B_M + u ^ n_inf + v ^ n_o + b n_o ^ n_inf   with u, v spacetime vectors and B_M a Lorentz bivector:
+#   n_o | B   = -u - b n_o,     n_inf | B = -v + b n_inf,     b = -n_inf | (n_o | B).
+D_PART = (n_o ^ n_inf) * (-(n_inf | (n_o | Bivector)))                  # dilation
+P_PART = -((n_o | Bivector) ^ n_inf) - D_PART                           # translations  u ^ n_inf
+K_PART = -((n_inf | Bivector) ^ n_o) - D_PART                           # special conformal v ^ n_o
+M_PART = Bivector - P_PART - K_PART - D_PART                            # Lorentz
+SECTOR_MAPS = {"M": M_PART, "P": P_PART, "K": K_PART, "D": D_PART}
+
+
+def sector(B, name):
+    """The `name` ('M','P','K','D') part of a bivector or bivector-valued map B."""
+    return SECTOR_MAPS[name](B).cast(Bivector)
+
+
+def sector_size(B, name) -> float:
+    """Largest coefficient magnitude of a sector of B (any batch/inputs)."""
+    return float(jnp.abs(sector(B, name).kernel).max())

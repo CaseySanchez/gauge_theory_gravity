@@ -1,66 +1,57 @@
-"""Curvature (spec section 7) and its sector decomposition."""
+"""Curvature (spec section 7), on extensors."""
 from __future__ import annotations
 
-import jax.numpy as jnp
-
 from . import algebra as al
-from .fields import biv, partials
-
-PAIRS = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+from .fields import get_derivative, permute_inputs, even
+import jax.numpy as jnp
 
 
 def curvature(omega, method: str = "jax", h: float = 1e-4):
-    """F_{mu nu} = d_mu Omega_nu - d_nu Omega_mu + 1/2 [Omega_mu, Omega_nu]  (coordinate vectors,
-    so the -Omega([a,b]) term vanishes; [X,Y] = XY - YX).
-    Returns x -> (4, 4, 15) blade coefficients; F[m, n] = F(e_m, e_n)."""
-    dOm = partials(omega, method, h)             # (4, 4, 15): [mu, nu, :]
+    """F(a,b) = a.grad Omega(b) - b.grad Omega(a) + 1/2 [Omega(a), Omega(b)]   (constant coordinate
+    vectors a,b, so the -Omega([a,b]) term drops; [X,Y] = XY - YX).
+    Returns x -> a map  Bivector <- (Spacetime, Spacetime).
+
+    d = derivative(Omega) has the inputs (b, step a) = a.grad Omega(b); swapping them gives the other term,
+    and numga's `commutator` is (XY - YX)/2, exactly the 1/2 [Omega(a), Omega(b)] of the spec."""
+    dOm = get_derivative(method, h)(omega)
 
     def F(x):
-        Om = biv(omega(x))                        # batch (4,)
-        d = dOm(x)
-        Omm = Om[:, None]
-        Omn = Om[None, :]
-        comm = (Omm * Omn - Omn * Omm).restrict[2].kernel   # (4,4,15)
-        return d - jnp.swapaxes(d, 0, 1) + 0.5 * comm
-
+        Om = omega(x)
+        d = dOm(x)                                 # Bivector <- (b, a): a . grad Omega(b)
+        return permute_inputs(d, (1, 0)) - d + Om.commutator(Om)
     return F
 
 
 def commutator_of_D(omega, Psi, method: str = "jax", h: float = 1e-4):
-    """[D_mu, D_nu] Psi, computed directly from the covariant derivative (second derivatives of Psi
-    cancel). Returns x -> (4,4,32)."""
+    """[D_a, D_b] Psi computed from the covariant derivative itself (second derivatives of Psi cancel):
+    a map Even <- (Spacetime a, Spacetime b)."""
     from .covariant import covariant_derivative
-    from .fields import even
-
+    dd = get_derivative(method, h)
     D = covariant_derivative(omega, Psi, method, h)
-    dD = partials(D, method, h)                  # (4[nu], 4[mu], 32): d_nu (D_mu Psi)
+    dD = dd(D)
 
     def C(x):
-        Om = biv(omega(x))
-        DPsi = even(D(x))                        # (4,) over mu
-        d = even(dD(x))                          # [nu, mu]
-        # D_nu D_mu Psi = d_nu (D_mu Psi) + 1/2 Omega_nu (D_mu Psi)
-        DD = d + 0.5 * Om[:, None] * DPsi[None, :]       # [nu, mu]
-        return DD.kernel - jnp.swapaxes(DD.kernel, 0, 1)   # [mu,nu] = D_mu D_nu - D_nu D_mu
+        # D_a(D_b Psi) = a.grad(D_b Psi) + 1/2 Omega(a) (D_b Psi); inputs (b, a) -> reorder to (a, b)
+        DbPsi = D(x)                                # Even <- b
+        Om_Db = permute_inputs(omega(x) * DbPsi, (1, 0))      # Omega(a) D_b Psi, inputs reordered to (b, a)
+        T = dD(x) + 0.5 * Om_Db                     # Even <- (b, a)   [D_a D_b Psi]
+        DaDb = permute_inputs(T, (1, 0))            # Even <- (a, b):  D_a D_b Psi
+        return DaDb - permute_inputs(DaDb, (1, 0))
     return C
 
 
 def bianchi_residual(omega, method: str = "jax", h: float = 1e-4):
-    """Cyclic sum  d_l F_mn + 1/2 [Omega_l, F_mn]  over (l,m,n). Must vanish."""
+    """Cyclic sum over (l,a,b) of  D_l F(a,b) = d_l F(a,b) + 1/2 [Omega(l), F(a,b)]; must vanish.
+    Returns x -> a map Bivector <- (Spacetime, Spacetime, Spacetime)."""
     F = curvature(omega, method, h)
-    dF = partials(F, method, h)                  # (4[l], 4, 4, 15)
+    dF = get_derivative(method, h)(F)
 
     def R(x):
-        Om = biv(omega(x))
-        Fx = biv(F(x))
-        adj = 0.5 * (Om[:, None, None] * Fx[None] - Fx[None] * Om[:, None, None]).restrict[2].kernel
-        T = dF(x) + adj                          # [l, m, n, :]  (D_l F_mn)
-        return T + jnp.transpose(T, (1, 2, 0, 3)) + jnp.transpose(T, (2, 0, 1, 3))
-
+        T = permute_inputs(dF(x), (2, 0, 1)) + omega(x).commutator(F(x))      # inputs (l, a, b)
+        return T + permute_inputs(T, (2, 0, 1)) + permute_inputs(T, (1, 2, 0))
     return R
 
 
-def sector_split(F_blade):
-    """Blade coefficients (..., 15) -> dict of sector coordinates {M,P,K,D}."""
-    g = al.to_generators(jnp.asarray(F_blade))
-    return {k: g[..., s] for k, s in al.SECTORS.items()}
+def sector_split(F):
+    """{M,P,K,D} parts of a bivector-valued extensor, by the null-basis projectors."""
+    return {k: al.sector(F, k) for k in al.SECTOR_MAPS}

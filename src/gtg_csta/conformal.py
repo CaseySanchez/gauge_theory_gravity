@@ -1,9 +1,9 @@
-"""Tier B: translation sector as coframe; normal conformal Cartan connection (spec 9.2, 10).
+"""Tier B: translation sector as coframe; normal conformal Cartan connection (spec 9.2, 10), on extensors.
 
-Connection:  Omega_mu = Lorentz(omega_mu) + e^a_mu P_a + f_{a mu} K_a + b_mu D,
-with generator-coordinates (M, P, K, D) of al.GENS.  The Lorentz part is the torsion-free spin
-connection of the coframe e.  The K coefficients f are fixed pointwise by the 'normal' conditions
-(F_D = 0, F_M trace-free); this module finds them numerically and compares with the Schouten tensor.
+    Omega = Omega_Lorentz  +  e ^ n_inf  +  f ^ n_o  +  b (n_o ^ n_inf)
+
+with e the coframe (Spacetime <- Spacetime), f another such map (the special-conformal part) and b a form
+(the dilation part).  Each term is a map Bivector <- Spacetime built by one wedge product.
 """
 from __future__ import annotations
 
@@ -15,87 +15,70 @@ from . import algebra as al
 from . import cartan
 from .curvature import curvature
 
-PAIRS = al.M_PAIRS
+S = al.Spacetime
+ALL = al.ALG.gatype((S, S))
 
 
 def connection(coframe, f_fn=None, b_fn=None):
-    """Omega(x): (4,15) blade coefficients. f_fn(x) -> (4,4) with f[a, mu]; b_fn(x) -> (4,)."""
-    om = cartan.spin_connection(coframe)
-    GEN = jnp.asarray(al.GEN)
-    ETA = cartan.ETA
+    """x -> Omega(x): Bivector <- Spacetime.  f_fn(x): Spacetime <- Spacetime;  b_fn(x): Scalar <- Spacetime."""
+    lorentz = cartan.lorentz_connection(coframe)
+    DIL = al.n_o ^ al.n_inf
 
     def Om(x):
-        w = jnp.einsum("mac,cb->mab", om(x), ETA)                      # omega^{ab}_mu
-        cM = jnp.stack([w[:, a, b] for a, b in PAIRS], axis=-1)        # (4,6)
-        e = coframe(x).T                                               # (mu, a): translation coords
-        f = jnp.zeros((4, 4)) if f_fn is None else f_fn(x).T           # (mu, a)
-        b = jnp.zeros((4, 1)) if b_fn is None else b_fn(x)[:, None]
-        c = jnp.concatenate([cM, e, f, b], axis=-1)                    # (4,15)
-        return jnp.einsum("ij,mj->mi", GEN, c)
-
+        e = coframe(x)
+        out = lorentz(x) + (e ^ al.n_inf).cast(al.Bivector)
+        if f_fn is not None:
+            out = out + (f_fn(x) ^ al.n_o).cast(al.Bivector)
+        if b_fn is not None:
+            out = out + (b_fn(x) * DIL).cast(al.Bivector)
+        return out
     return Om
 
 
-def sectors(F_blade):
-    g = al.to_generators(F_blade)
-    return {k: g[..., s] for k, s in al.SECTORS.items()}
+def ricci_vector(F, E):
+    """Ric(nu) = sum_a e^a _| F_M(E_a, nu):  the trace of the Lorentz-sector curvature over its first
+    coordinate input and one frame index; a map Vector <- Spacetime.  (= R^b_nu, frame index up.)"""
+    FM = al.sector(F, "M")
+    return (S | FM(E, S)).contract(1, 2)
 
 
-def lorentz_full(cM):
-    """(..., 6) coordinates in M_PAIRS order -> antisymmetric (..., 4, 4) matrix X^{ab}."""
-    out = jnp.zeros((*cM.shape[:-1], 4, 4))
-    for k, (a, b) in enumerate(PAIRS):
-        out = out.at[..., a, b].set(cM[..., k]).at[..., b, a].set(-cM[..., k])
-    return out
-
-
-def normal_residual(coframe, x, f):
-    """Residual of the normal conditions for a constant-in-the-neighbourhood f (4,4): F_D (6 comps)
-    and the trace T^b_nu = F^{ab}_{mu nu} E_a^mu (16 comps). Affine in f."""
-    Om = connection(coframe, lambda _x: f)
-    F = curvature(Om)(x)
-    sec = sectors(F)
-    FM = lorentz_full(sec["M"])                                   # [mu, nu, a, b]
-    E = jnp.linalg.inv(coframe(x))                                # E[mu, a] = E_a^mu
-    trace = jnp.einsum("mnab,ma->nb", FM, E)
-    return jnp.concatenate([sec["D"].reshape(-1), trace.reshape(-1)])
+def normal_residual_arrays(coframe, x, fk):
+    """Residual of the normal conditions for a pointwise-constant f given as a (4,4) kernel:
+    F_D (all components) and the trace Ric of F_M.  Affine in f."""
+    f = al.CTX.extensor(ALL, fk)
+    F = curvature(connection(coframe, lambda _x: f))(x)
+    E = coframe(x).inverse()
+    return jnp.concatenate([al.sector(F, "D").kernel.reshape(-1), ricci_vector(F, E).kernel.reshape(-1)])
 
 
 def solve_normal_f(coframe, x):
-    """Least-squares f (4,4) making the residual vanish; also returns the final residual norm."""
+    """Least-squares f (Spacetime <- Spacetime) making the normal conditions hold; also the residual and
+    the rank of the (16-unknown) linear system."""
     f0 = jnp.zeros((4, 4))
-    r0 = normal_residual(coframe, x, f0)
-    J = jax.jacfwd(lambda v: normal_residual(coframe, x, v.reshape(4, 4)))(f0.reshape(-1))
+    r0 = normal_residual_arrays(coframe, x, f0)
+    J = jax.jacfwd(lambda v: normal_residual_arrays(coframe, x, v.reshape(4, 4)))(f0.reshape(-1))
     sol, *_ = jnp.linalg.lstsq(J, -r0)
-    res = normal_residual(coframe, x, sol.reshape(4, 4))
-    return sol.reshape(4, 4), float(jnp.abs(res).max()), int(jnp.linalg.matrix_rank(J))
+    res = normal_residual_arrays(coframe, x, sol.reshape(4, 4))
+    return (al.CTX.extensor(ALL, sol.reshape(4, 4)), float(jnp.abs(res).max()), int(jnp.linalg.matrix_rank(J)))
 
 
-def schouten_frame(coframe, x):
-    """P_{ab} = 1/2 (Ric_ab - R g_ab / 6) in the frame, with Ric from cartan.ricci_coordinate
-    (R_{sn} = R^r_{s r n}) and R = g^{sn} R_{sn};  returned as P[a, mu] = P_{ab} eta^{bb} ... see below."""
+def schouten(coframe):
+    """x -> P = 1/2 (Ric - R e / 6): Spacetime <- Spacetime (frame index up, coordinate index down), from
+    the curvature of the Lorentz connection alone."""
+    lorentz = cartan.lorentz_connection(coframe)
+    F = curvature(lorentz)
+
+    def P(x):
+        e = coframe(x)
+        E = e.inverse()
+        T = ricci_vector(F(x), E).cast(S)                       # R^b_nu
+        R = T(E).trace()                                         # scalar curvature
+        return 0.5 * (T - (R / 6.0) * e)
+    return P
+
+
+def ricci_scalar(coframe, x):
     e = coframe(x)
-    E = jnp.linalg.inv(e)
-    g = cartan.metric(coframe)(x)
-    Ric = cartan.ricci_coordinate(coframe)(x)
-    Rs = jnp.einsum("sn,sn->", jnp.linalg.inv(g), Ric)
-    P = 0.5 * (Ric - Rs * g / 6.0)                                 # P_{mu nu}
-    # f[a, mu]: frame index up, coordinate index down:  P_{mu nu} E_b^nu eta^{ba}... use P_{b mu} = E_b^nu P_{nu mu}
-    Pb = jnp.einsum("nb,nm->bm", E, P)                             # P_{b mu}, frame-lower
-    return jnp.einsum("ab,bm->am", jnp.asarray(al.ETA4), Pb), Rs   # raise with eta
-
-
-# ---------- example spacetimes ----------
-
-def frw(a=lambda t: t ** (2.0 / 3.0)):
-    """Spatially flat FRW: e^0 = dt, e^i = a(t) dx^i (conformally flat, non-vacuum)."""
-    def coframe(x):
-        return jnp.diag(jnp.array([1.0, a(x[0]), a(x[0]), a(x[0])]))
-    return coframe
-
-
-def static_lapse(N=lambda x: 1.0 + 0.3 * jnp.sin(x[1]) * jnp.cos(x[2]) + 0.1 * x[3] ** 2):
-    """e^0 = N(x) dt, e^i = dx^i: generically non-conformally-flat, non-vacuum."""
-    def coframe(x):
-        return jnp.diag(jnp.array([N(x), 1.0, 1.0, 1.0]))
-    return coframe
+    E = e.inverse()
+    F = curvature(cartan.lorentz_connection(coframe))(x)
+    return ricci_vector(F, E).cast(S)(E).trace()

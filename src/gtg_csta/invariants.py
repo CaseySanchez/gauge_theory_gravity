@@ -1,37 +1,30 @@
-"""Quadratic curvature invariant of the CSTA connection (spec section 10) and an independent Weyl^2."""
+"""Quadratic curvature invariant of the CSTA connection (spec section 10), on extensors."""
 from __future__ import annotations
 
-import jax.numpy as jnp
-
-from . import cartan
+from . import algebra as al
 from .curvature import curvature
-from .fields import biv
+from . import conformal as cf, cartan
+
+S = al.Spacetime
 
 
 def quadratic_invariant(coframe, omega):
-    """I(x) = g^{mu rho} g^{nu sigma} < F_{mu nu} ~F_{rho sigma} >_0  with the full 15-bivector F."""
+    """I(x) = g^{mu rho} g^{nu sigma} < F_{mu nu} ~F_{rho sigma} >_0 with the full 15-bivector F.
+    In the frame, with F(E, E), the two index contractions run through the algebra's own metric."""
     F = curvature(omega)
-    g = cartan.metric(coframe)
 
     def I(x):
-        Fx = biv(F(x))                                          # batch (4,4)
-        ginv = jnp.linalg.inv(g(x))
-        prod = (Fx[:, :, None, None] * ~Fx[None, None, :, :]).restrict[0].kernel[..., 0]   # [m,n,r,s]
-        return jnp.einsum("mr,ns,mnrs->", ginv, ginv, prod)
-
+        E = coframe(x).inverse()
+        Ff = F(x)(E, E)                                        # Bivector <- (frame a, frame b)
+        return (Ff * ~Ff).restrict[0].contract(1, 3).contract(1, 2)
     return I
 
 
 def weyl_squared(coframe, x):
-    """C_{abcd}C^{abcd} = Riem^2 - 2 Ric^2 + R^2/3, from the coordinate Riemann tensor."""
-    R = cartan.riemann_coordinate(coframe)(x)                   # R^r_{s m n}
-    g = cartan.metric(coframe)(x)
-    gi = jnp.linalg.inv(g)
-    Rl = jnp.einsum("ra,asmn->rsmn", g, R)                      # R_{r s m n}
-    Ru = jnp.einsum("rsmn,ra,sb,mc,nd->abcd", Rl, gi, gi, gi, gi)
-    riem2 = jnp.einsum("rsmn,rsmn->", Rl, Ru)
-    Ric = jnp.einsum("rsrn->sn", R)
-    Ricu = gi @ Ric @ gi
-    ric2 = jnp.einsum("sn,sn->", Ric, Ricu)
-    Rs = jnp.einsum("sn,sn->", gi, Ric)
-    return riem2 - 2 * ric2 + Rs ** 2 / 3
+    """C^2 = Riem^2 - 2 Ric^2 + R^2/3, with Riem^2 = 2 I of the Lorentz connection."""
+    lorentz = cartan.lorentz_connection(coframe)
+    riem2 = 2 * quadratic_invariant(coframe, lorentz)(x)
+    e = coframe(x)
+    E = e.inverse()
+    T = cf.ricci_vector(curvature(lorentz)(x), E).cast(S)(E)    # Ric^b_a as an endomorphism
+    return riem2 - 2 * T(T).trace() + T.trace() ** 2 / 3

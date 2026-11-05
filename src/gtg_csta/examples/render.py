@@ -16,14 +16,14 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 
-from .. import algebra as al, cartan, conformal as cf, curvature as cv, fields as fl
+from .. import algebra as al, cartan, conformal as cf, curvature as cv
 from .. import invariants as iv, transport as tp
 
 OUT = Path(__file__).resolve().parents[3] / "output"
 OUT.mkdir(exist_ok=True)
 M = 1.0
 COF = cartan.painleve_gullstrand(M)
-OMEGA = cartan.lorentz_connection_blades(COF)
+OMEGA = cartan.lorentz_connection(COF)
 
 
 def _grid(half=6.0, n=121):
@@ -35,7 +35,7 @@ def _grid(half=6.0, n=121):
 def _eval_on_plane(fn, X, Y, z=0.37, t=0.0):
     """vmap fn(x4) over a slice at height z (offset so r never hits exactly 0)."""
     pts = jnp.stack([jnp.full(X.size, t), X.ravel(), Y.ravel(), jnp.full(X.size, z)], axis=-1)
-    return np.asarray(jax.jit(jax.vmap(fn))(pts))
+    return np.asarray(jax.jit(jax.vmap(lambda k: fn(al.point(k))))(pts))
 
 
 def _horizon(ax):
@@ -44,9 +44,8 @@ def _horizon(ax):
 
 def slices(half=6.0, n=101):
     u, X, Y = _grid(half, n)
-    I = iv.quadratic_invariant(COF, OMEGA)
-    sec_fn = lambda x: jnp.array([jnp.abs(s).max() for s in cv.sector_split(cv.curvature(OMEGA)(x)).values()])
-    # sector magnitudes of the Lorentz-sector F, and of F with the f=0 conformal completion (identical)
+    I = lambda x: iv.quadratic_invariant(COF, OMEGA)(x).kernel.reshape(())
+    sec_fn = lambda x: jnp.array([jnp.abs(al.sector(cv.curvature(OMEGA)(x), k).kernel).max() for k in "MPKD"])
     inv = _eval_on_plane(I, X, Y).reshape(X.shape)
     sec = _eval_on_plane(sec_fn, X, Y).reshape(*X.shape, 4)
     r = np.sqrt(X ** 2 + Y ** 2 + 0.37 ** 2)
@@ -81,7 +80,8 @@ def holonomy_map(half=6.0, n=41, eps=0.4, steps=10):
         return jnp.abs(T - one).max()
 
     pts = jnp.stack([jnp.zeros(X.size), X.ravel(), Y.ravel(), jnp.full(X.size, 0.37)], axis=-1)
-    h = np.asarray(jax.jit(jax.vmap(dev))(pts)).reshape(X.shape)
+    # lax.map, not jit(vmap): jit(vmap(holonomy)) returns wrong values for batches >~ 16 (see RESULTS.md)
+    h = np.asarray(jax.jit(lambda P: jax.lax.map(dev, P))(pts)).reshape(X.shape)
     fig, ax = plt.subplots(figsize=(5.4, 4.6))
     im = ax.imshow(h + 1e-14, extent=[-half, half, -half, half], origin="lower", norm=LogNorm(1e-4, 1e1), cmap="inferno")
     fig.colorbar(im, ax=ax, label="max |T_loop - 1|"); _horizon(ax)
@@ -93,7 +93,7 @@ def holonomy_map(half=6.0, n=41, eps=0.4, steps=10):
 # ---------------- ray tracing ----------------
 
 def _hamiltonian(x, p):
-    g = cartan.metric(COF)(x)
+    g = cartan.metric(COF)(al.point(x)).kernel[0]
     return 0.5 * p @ jnp.linalg.solve(g, p)
 
 
@@ -112,23 +112,26 @@ def _rk4(s, h):
     return jax.tree_util.tree_map(lambda u, a, b, c, d: u + h / 6 * (a + 2 * b + 2 * c + d), s, k1, k2, k3, k4)
 
 
-def _static_camera(D, fov, nx, ny):
-    """Initial (x, p) for every pixel: static observer at (D,0,0) looking at the hole (towards -x),
-    ray tangent = the arriving photon's momentum k = u - n (traced backward with negative step)."""
-    x0 = jnp.array([0.0, D, 0.0, 0.0])
-    g = cartan.metric(COF)(x0)
+def _static_camera(D, fov, nx, ny, incl=np.radians(20.0)):
+    """Initial (x, p) for every pixel: a static observer at distance D, elevated by `incl` above the disk plane
+    (z = 0), looking at the hole.  The ray tangent is the arriving photon's momentum k = u - n (traced
+    backward with a negative step).  Returns also the image-plane half-width tan(fov/2)."""
+    x0 = jnp.array([0.0, D * np.cos(incl), 0.0, D * np.sin(incl)])
+    g = cartan.metric(COF)(al.point(x0)).kernel[0]
     u = jnp.array([1.0, 0, 0, 0]); u = u / jnp.sqrt(u @ g @ u)
-    # spatial frame orthonormal wrt g, orthogonal to u  (Gram-Schmidt of d_x,d_y,d_z)
+    # spatial triad in coordinates: outward r, right = z x r, up = r x right; then orthonormalise wrt g, orthogonal to u
+    rh = np.array(x0[1:]) / D
+    right = np.cross([0, 0, 1.0], rh); right /= np.linalg.norm(right)
+    up = np.cross(rh, right)
     def proj(v, basis):
         for b in basis:
             v = v - (v @ g @ b) / (b @ g @ b) * b
         return v
     es = []
-    for k in (1, 2, 3):
-        v = jnp.zeros(4).at[k].set(1.0)
-        v = proj(v, [u] + es)
+    for d in (rh, right, up):
+        v = proj(jnp.concatenate([jnp.zeros(1), jnp.asarray(d)]), [u] + es)
         es.append(v / jnp.sqrt(-(v @ g @ v)))
-    ex, ey, ez = es                                    # ex points outward (+x)
+    ex, ey, ez = es                                    # outward, right, up
     a = np.tan(fov / 2)
     sx = np.linspace(-a, a, nx); sy = np.linspace(-a * ny / nx, a * ny / nx, ny)
     SX, SY = np.meshgrid(sx, sy)
@@ -137,12 +140,12 @@ def _static_camera(D, fov, nx, ny):
     n = n / nn[:, None]                                # unit spatial vector, looking direction
     k = u[None] - n                                    # arriving photon's tangent (future-directed, null)
     p = jnp.einsum("ab,pb->pa", g, k)
-    return jnp.broadcast_to(x0, (p.shape[0], 4)), p
+    return jnp.broadcast_to(x0, (p.shape[0], 4)), p, a
 
 
-def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0):
+def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0, incl=np.radians(20.0)):
     """Backward ray tracing of a thin accretion disk (z=0, r_in..r_out) and a checkered sky."""
-    x0, p0 = _static_camera(D, fov, nx, ny)
+    x0, p0, a = _static_camera(D, fov, nx, ny, incl)
     h0 = 0.03
 
     def trace(x, p):
@@ -157,7 +160,7 @@ def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0):
             hit = hit | on
             hr = jnp.where(on, rc, hr)
             rn = jnp.linalg.norm(xn[1:])
-            alive = alive & (rn > 0.4) & (rn < 120.0)
+            alive = alive & (rn > 2.2 * M) & (rn < 120.0)      # traced back to the horizon: emitted by nothing (black)
             xn = jnp.where(alive, xn, xx); pn = jnp.where(alive, pn, pp)
             return ((xn, pn), hit, hr, alive), None
         c0 = ((x, p), False, 0.0, True)
@@ -181,6 +184,10 @@ def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0):
     ax.imshow(img, origin="lower"); ax.axis("off")
     ax.set_title(f"Schwarzschild lensing from the PG tetrad (M=1, camera at r={D:g}, disk {r_in:g}-{r_out:g})")
     fig.tight_layout(); fig.savefig(OUT / "render_lensing.png", dpi=140)
+    # validation: the shadow radius of a static observer, sin(alpha) = (3 sqrt3 M / D) sqrt(1 - 2M/D)
+    rho = np.sqrt((~escaped).mean() * 4 * a ** 2 * ny / nx / np.pi)                 # tan(alpha) from the area
+    alpha = np.arcsin(3 * np.sqrt(3) * M / D * np.sqrt(1 - 2 * M / D))
+    print(f"lensing: shadow angular radius {np.arctan(rho):.4f} rad, analytic {alpha:.4f} rad")
     print(f"lensing: escaped {escaped.mean():.2f}, captured {(~escaped & ~hit).mean():.2f}, disk {hit.mean():.2f}")
 
 

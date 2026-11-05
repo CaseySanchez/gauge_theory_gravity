@@ -5,32 +5,29 @@ import numpy as np
 import jax.numpy as jnp
 
 from . import algebra as al
-from .fields import biv
+from .fields import bivector
 
 
 def lorentz_connection(omega_ab):
-    """Omega_mu from omega^{ab}_mu (shape (4, 6), ordered as M_PAIRS): e=f=b=0."""
+    """Omega(d_mu) from omega^{ab}_mu (4, 6) in al.M_PAIRS order: e = f = b = 0.  Bivector <- Spacetime."""
     c = jnp.concatenate([jnp.asarray(omega_ab), jnp.zeros((*jnp.shape(omega_ab)[:-1], 9))], axis=-1)
-    return jnp.einsum("ij,...j->...i", jnp.asarray(al.GEN), c)
+    return al.connection_from_columns(al.to_blades(c))
 
 
-def lorentz_rotor_field(B_ab_fn):
-    """Return x -> even coefficients (32,) of exp of a spacetime bivector (a Lorentz rotor)."""
-    def R(x):
-        c = jnp.concatenate([jnp.asarray(B_ab_fn(x)), jnp.zeros(9)])
-        return biv(jnp.einsum("ij,j->i", jnp.asarray(al.GEN), c)).exp().kernel
-    return R
+def lorentz_rotor(B_ab):
+    """A Lorentz rotor exp(B) from 6 coefficients in al.M_PAIRS order (an Even extensor)."""
+    c = jnp.concatenate([jnp.asarray(B_ab), jnp.zeros(9)])
+    return bivector(al.to_blades(c)).exp()
 
 
-def sector_leakage(F_blade) -> dict:
-    """Max |component| of F outside the Lorentz sector, per sector P, K, D."""
-    g = al.to_generators(np.asarray(F_blade))
-    return {k: float(np.abs(g[..., s]).max()) for k, s in al.SECTORS.items() if k != "M"}
+def sector_leakage(F) -> dict:
+    """Largest component of a bivector-valued extensor outside the Lorentz sector, per sector P, K, D."""
+    return {k: al.sector_size(F, k) for k in "PKD"}
 
 
 def numga_sta_structure_constants() -> np.ndarray:
     """f_sta[i,j,k] for M_ab = e_a ^ e_b in numga's own STA 'x+y+z+t-' (opposite sign to ours),
-    with generators ordered as al.M_PAIRS over (t,x,y,z)."""
+    generators ordered as al.M_PAIRS over (t,x,y,z)."""
     from numga import Algebra
     from numga.backend.jax import JaxContext
     A = Algebra("x+y+z+t-")
@@ -38,7 +35,7 @@ def numga_sta_structure_constants() -> np.ndarray:
     es = [m.t, m.x, m.y, m.z]
     G = [es[a] ^ es[b] for a, b in al.M_PAIRS]
     Z = m.bivector(np.zeros(6))
-    K = np.stack([np.asarray((Z + g).kernel) for g in G], axis=1)      # (6,6)
+    K = np.stack([np.asarray((Z + g).kernel) for g in G], axis=1)
     Kinv = np.linalg.inv(K)
     f = np.zeros((6, 6, 6))
     for i, gi in enumerate(G):
