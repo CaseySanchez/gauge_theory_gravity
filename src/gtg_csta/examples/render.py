@@ -143,56 +143,92 @@ def _static_camera(D, fov, nx, ny, incl=np.radians(20.0)):
     return jnp.broadcast_to(x0, (p.shape[0], 4)), p, a
 
 
-def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0, incl=np.radians(20.0)):
-    """Backward ray tracing of a thin accretion disk (z=0, r_in..r_out) and a checkered sky."""
+def _trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl):
+    """Backward-trace every pixel.  Returns a dict of per-pixel arrays: `escaped`, `sky` (unit direction the
+    ray reaches at infinity), `hit` (crossed the disk), `hr`, `hphi` (radius and azimuth of the nearest disk
+    crossing), and the image-plane half-width `a`."""
     x0, p0, a = _static_camera(D, fov, nx, ny, incl)
     h0 = 0.03
 
     def trace(x, p):
         def body(c, _):
-            (xx, pp), hit, hr, alive = c
+            (xx, pp), hit, hr, hp, alive = c
             r = jnp.linalg.norm(xx[1:])
             h = -h0 * jnp.clip(r, 1.0, 10.0)            # backward in affine parameter
             xn, pn = _rk4((xx, pp), h)
             crossed = (xx[3] * xn[3] < 0) & alive & (~hit)
-            rc = jnp.linalg.norm(0.5 * (xx[1:] + xn[1:]))
+            mid = 0.5 * (xx[1:] + xn[1:])
+            rc = jnp.linalg.norm(mid)
             on = crossed & (rc > r_in) & (rc < r_out)
             hit = hit | on
             hr = jnp.where(on, rc, hr)
+            hp = jnp.where(on, jnp.arctan2(mid[1], mid[0]), hp)
             rn = jnp.linalg.norm(xn[1:])
             alive = alive & (rn > 2.2 * M) & (rn < 120.0)      # traced back to the horizon: emitted by nothing (black)
             xn = jnp.where(alive, xn, xx); pn = jnp.where(alive, pn, pp)
-            return ((xn, pn), hit, hr, alive), None
-        c0 = ((x, p), False, 0.0, True)
-        ((xf, pf), hit, hr, alive), _ = jax.lax.scan(body, c0, None, length=steps)
-        return xf, hit, hr, alive
+            return ((xn, pn), hit, hr, hp, alive), None
+        c0 = ((x, p), False, 0.0, 0.0, True)
+        ((xf, pf), hit, hr, hp, alive), _ = jax.lax.scan(body, c0, None, length=steps)
+        return xf, hit, hr, hp
 
-    xs, hit, hr, alive = jax.jit(jax.vmap(trace))(x0, p0)
-    xs, hit, hr, alive = map(np.asarray, (xs, hit, hr, alive))
+    xs, hit, hr, hp = map(np.asarray, jax.jit(jax.vmap(trace))(x0, p0))
     rf = np.linalg.norm(xs[:, 1:], axis=1)
-    escaped = rf > 100.0
-    d = xs[:, 1:] / np.maximum(rf, 1e-9)[:, None]
-    theta = np.arccos(np.clip(d[:, 2], -1, 1)); phi = np.arctan2(d[:, 1], d[:, 0])
+    return dict(escaped=rf > 100.0, sky=xs[:, 1:] / np.maximum(rf, 1e-9)[:, None], hit=hit, hr=hr, hphi=hp, a=a)
+
+
+def _shade(sc, nx, ny, r_in, r_out, t=0.0, sky_turn=0.0):
+    """Colour the traced scene at time t.  The disk turns differentially (Kepler, angular velocity r^-3/2) and
+    carries a two-armed pattern; the sky may be turned about the z axis by `sky_turn`."""
+    d = sc["sky"]
+    theta = np.arccos(np.clip(d[:, 2], -1, 1)); phi = np.arctan2(d[:, 1], d[:, 0]) - sky_turn
     check = ((np.floor(theta / (np.pi / 12)) + np.floor(phi / (np.pi / 12))) % 2).astype(float)
     sky = np.stack([0.10 + 0.25 * check, 0.12 + 0.2 * check, 0.25 + 0.3 * check], -1)
-    disk = plt.cm.inferno(np.clip((r_out - hr) / (r_out - r_in), 0, 1))[:, :3]
+    hr = sc["hr"]
+    ramp = np.clip((r_out - hr) / (r_out - r_in), 0, 1)
+    pattern = 0.65 + 0.35 * np.cos(2 * (sc["hphi"] - t * np.maximum(hr, 1.0) ** -1.5) + 0.6 * hr)
+    disk = plt.cm.inferno(np.clip(ramp * pattern * 1.25, 0, 1))[:, :3]
     img = np.zeros((nx * ny, 3))
-    img[escaped] = sky[escaped]
-    img[hit] = disk[hit]                               # nearest disk crossing wins
-    img = img.reshape(ny, nx, 3)
+    img[sc["escaped"]] = sky[sc["escaped"]]
+    img[sc["hit"]] = disk[sc["hit"]]                    # nearest disk crossing wins
+    return img.reshape(ny, nx, 3)
+
+
+def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0, incl=np.radians(20.0)):
+    """Backward ray tracing of a thin accretion disk (z=0, r_in..r_out) and a checkered sky."""
+    sc = _trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl)
+    img = _shade(sc, nx, ny, r_in, r_out)
     fig, ax = plt.subplots(figsize=(7.5, 5.8))
     ax.imshow(img, origin="lower"); ax.axis("off")
     ax.set_title(f"Schwarzschild lensing from the PG tetrad (M=1, camera at r={D:g}, disk {r_in:g}-{r_out:g})")
     fig.tight_layout(); fig.savefig(OUT / "render_lensing.png", dpi=140)
     # validation: the shadow radius of a static observer, sin(alpha) = (3 sqrt3 M / D) sqrt(1 - 2M/D)
-    rho = np.sqrt((~escaped).mean() * 4 * a ** 2 * ny / nx / np.pi)                 # tan(alpha) from the area
+    esc, hit = sc["escaped"], sc["hit"]
+    rho = np.sqrt((~esc).mean() * 4 * sc["a"] ** 2 * ny / nx / np.pi)                 # tan(alpha) from the area
     alpha = np.arcsin(3 * np.sqrt(3) * M / D * np.sqrt(1 - 2 * M / D))
     print(f"lensing: shadow angular radius {np.arctan(rho):.4f} rad, analytic {alpha:.4f} rad")
-    print(f"lensing: escaped {escaped.mean():.2f}, captured {(~escaped & ~hit).mean():.2f}, disk {hit.mean():.2f}")
+    print(f"lensing: escaped {esc.mean():.2f}, captured {(~esc & ~hit).mean():.2f}, disk {hit.mean():.2f}")
 
 
-ALL = dict(slices=slices, holonomy=holonomy_map, lensing=lensing)
+def lensing_gif(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0, incl=np.radians(20.0),
+                frames=60, turns=1.0):
+    """Animated GIF: the same traced image (one ray trace; Schwarzschild is static) with the disk turning
+    differentially (Kepler), so that its two-armed pattern shears, in the direct and the lensed images alike.  `turns` is the number of inner-edge orbits in the loop."""
+    from PIL import Image
+    sc = _trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl)
+    period = 2 * np.pi * r_in ** 1.5                      # orbital period at the inner edge
+    imgs = []
+    for k in range(frames):
+        f = k / frames
+        img = _shade(sc, nx, ny, r_in, r_out, t=turns * period * f)
+        im = Image.fromarray((np.flipud(img) * 255).astype(np.uint8)).resize((nx * 4, ny * 4), Image.NEAREST)
+        imgs.append(im)
+    path = OUT / "render_lensing.gif"
+    imgs[0].save(path, save_all=True, append_images=imgs[1:], duration=50, loop=0, optimize=True)
+    print("lensing_gif: wrote", path, f"({frames} frames)")
+
+
+ALL = dict(slices=slices, holonomy=holonomy_map, lensing=lensing, lensing_gif=lensing_gif)
 
 if __name__ == "__main__":
-    for name in (sys.argv[1:] or ALL):
+    for name in (sys.argv[1:] or [k for k in ALL if k != 'lensing_gif']):
         ALL[name]()
