@@ -24,15 +24,16 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import h5py
-import jax
-import jax.numpy as jnp
 import numpy as np
+from numga.extensor import Extensor
 
 from . import algebra as al
 from . import cartan, conformal as cf, invariants as iv
+from .cartan import Coframe
 from .curvature import curvature
 
 INVARIANTS = ("weyl2_half", "riem2_half", "ricci_scalar")
@@ -42,55 +43,75 @@ INVARIANTS = ("weyl2_half", "riem2_half", "ricci_scalar")
 # fields
 # ------------------------------------------------------------------------------------------
 
-def field_function(coframe):
-    """x4 (jnp array) -> dict of the exported fields at that spacetime point (scalars and the shift vector)."""
+def field_function(coframe: Coframe) -> Callable[[Extensor], dict[str, Extensor]]:
+    """position (a batch of them is fine) -> the extensors the exported fields are read from."""
     lorentz = cartan.lorentz_connection(coframe)
-    schouten = cf.schouten(coframe)
-    normal = cf.connection(coframe, schouten)
-    F_normal = curvature(normal)
-    I_lorentz = iv.quadratic_invariant(coframe, lorentz)
-    I_normal = iv.quadratic_invariant(coframe, normal)
+    normal = cf.connection(coframe, cf.schouten(coframe))
+    strength = curvature(normal)
+    normal_density = iv.quadratic_invariant(coframe, normal)
+    lorentz_density = iv.quadratic_invariant(coframe, lorentz)
 
-    def fields(k):
-        x = al.point(k)
-        F = F_normal(x)
-        out = {
-            "weyl2_half": I_normal(x).kernel.reshape(()),
-            "riem2_half": I_lorentz(x).kernel.reshape(()),
-            "ricci_scalar": cf.ricci_scalar(coframe, x).kernel.reshape(()),
+    def fields(x: Extensor) -> dict[str, Extensor]:
+        curved = strength(x)
+        return {
+            "weyl2_half": normal_density(x),
+            "riem2_half": lorentz_density(x),
+            "ricci_scalar": cf.ricci_scalar(coframe, x),
+            "F_M": al.sector(curved, "M"), "F_P": al.sector(curved, "P"),
+            "F_K": al.sector(curved, "K"), "F_D": al.sector(curved, "D"),
+            "coframe": coframe(x),
         }
-        for s in "MPKD":
-            out["F_" + s] = jnp.sqrt(jnp.sum(al.sector(F, s).kernel ** 2))
-        out["shift"] = coframe(x).kernel[1:, 0]
-        return out
+
     return fields
 
 
-def evaluate_slice(coframe, t: float, axes, chunk: int = 2048) -> dict:
+def readout(fields: dict[str, Extensor]) -> dict[str, np.ndarray]:
+    """The numpy arrays written to file, per grid point (leading axis): scalars, sector magnitudes (L2 norm of the
+    coefficients) and the shift e^i_0."""
+    out = {name: np.asarray(fields[name].kernel).reshape(len(fields[name].kernel), -1)[:, 0]
+           for name in INVARIANTS}
+    for name in ("F_M", "F_P", "F_K", "F_D"):
+        kernel = np.asarray(fields[name].kernel)
+        out[name] = np.sqrt((kernel.reshape(len(kernel), -1) ** 2).sum(axis=1))
+    out["shift"] = np.asarray(fields["coframe"].kernel)[:, 1:, 0]
+    return out
+
+
+def evaluate_points(coframe: Coframe, points: np.ndarray, chunk: int = 2048) -> dict[str, np.ndarray]:
+    """Every exported field at spacetime points (N, 4), as numpy arrays with a leading axis of N. Non-finite points
+    are set to zero in every field and flagged by `valid`. The points go through the extensor code in chunks, each
+    one batch of positions under `jit`."""
+    import jax
+
+    @jax.jit
+    def evaluate(positions: Extensor) -> dict[str, Extensor]:
+        return field_function(coframe)(positions)
+
+    parts = []
+    for start in range(0, len(points), chunk):
+        block = points[start:start + chunk]
+        padding = chunk - len(block)                                   # keep one compiled shape
+        if padding:
+            block = np.concatenate([block, np.repeat(block[-1:], padding, axis=0)])
+        values = readout(evaluate(al.point(block)))
+        parts.append({name: array[:chunk - padding] for name, array in values.items()})
+    flat = {name: np.concatenate([part[name] for part in parts]) for name in parts[0]}
+    valid = np.all([np.isfinite(array).reshape(len(array), -1).all(axis=1) for array in flat.values()], axis=0)
+    data = {name: np.where(valid.reshape((-1,) + (1,) * (array.ndim - 1)), array, 0.0) for name, array in flat.items()}
+    data["valid"] = valid.astype(np.uint8)
+    return data
+
+
+def evaluate_slice(coframe: Coframe, t: float, axes, chunk: int = 2048) -> dict:
     """Evaluate every field on the grid `axes = (xs, ys, zs)` at lab time t.  Returns arrays shaped
-    (nz, ny, nx) (and (nz, ny, nx, 3) for the shift), x varying fastest, plus `valid`."""
+    (nz, ny, nx) (and (nz, ny, nx, 3) for the shift), x varying fastest, plus the log10 versions and `valid`."""
     xs, ys, zs = axes
     Z, Y, X = np.meshgrid(zs, ys, xs, indexing="ij")
-    pts = np.stack([np.full(X.size, t), X.ravel(), Y.ravel(), Z.ravel()], axis=-1)
-    f = jax.jit(jax.vmap(field_function(coframe)))
-    parts = []
-    for i in range(0, len(pts), chunk):
-        block = pts[i:i + chunk]
-        pad = chunk - len(block)                                   # keep one compiled shape
-        if pad:
-            block = np.concatenate([block, np.repeat(block[-1:], pad, axis=0)])
-        res = jax.tree_util.tree_map(np.asarray, f(jnp.asarray(block)))
-        parts.append(jax.tree_util.tree_map(lambda a: a[:chunk - pad], res))
-    flat = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
-    shape = X.shape
-    valid = np.all([np.isfinite(flat[k]).reshape(len(flat[k]), -1).all(axis=1) for k in flat], axis=0)
-    data = {}
-    for k, v in flat.items():
-        v = np.where(valid.reshape((-1,) + (1,) * (v.ndim - 1)), v, 0.0)
-        data[k] = v.reshape(*shape, *v.shape[1:])
-    for k in INVARIANTS:
-        data["log10_" + k] = np.sign(data[k]) * np.log10(np.abs(data[k]) + 1e-12)
-    data["valid"] = valid.reshape(shape).astype(np.uint8)
+    points = np.stack([np.full(X.size, t), X.ravel(), Y.ravel(), Z.ravel()], axis=-1)
+    flat = evaluate_points(coframe, points, chunk)
+    data = {name: array.reshape(*X.shape, *array.shape[1:]) for name, array in flat.items()}
+    for name in INVARIANTS:
+        data["log10_" + name] = np.sign(data[name]) * np.log10(np.abs(data[name]) + 1e-12)
     return data
 
 
@@ -151,16 +172,10 @@ def export_sequence(coframe, times, out, stem, n=48, half=10.0, center=(0.0, 0.0
 # the two spacetimes
 # ------------------------------------------------------------------------------------------
 
-def flyby(v: float = 0.6, M: float = 1.0):
-    """Schwarzschild (mass M) moving along +x at speed v, passing the origin at t = 0 (a boosted PG tetrad).
+def flyby(speed: float = 0.6, mass: float = 1.0) -> Coframe:
+    """Schwarzschild (mass M) moving along +x at the given speed, passing the origin at t = 0 (a boosted PG tetrad).
     Vacuum: Weyl^2 is the boosted r^-6 profile, Ricci = 0, Cotton = 0."""
-    return cartan.coframe_field(cartan.boosted(cartan.pg_matrix(lambda t: M), v))
-
-
-def growing_mass(M0: float = 1.0, dM: float = 1.0, t0: float = 0.0, width: float = 2.0):
-    """PG-form geometry with M(t) = M0 + dM/2 (1 + tanh((t - t0)/width)).  A toy with matter (Ricci != 0), so
-    the special-conformal sector (Cotton) is switched on while the mass changes."""
-    return cartan.coframe_field(cartan.pg_matrix(lambda t: M0 + 0.5 * dM * (1.0 + jnp.tanh((t - t0) / width))))
+    return cartan.boosted(cartan.schwarzschild(mass), speed)
 
 
 def main(argv=None):
@@ -176,12 +191,12 @@ def main(argv=None):
     if a.case == "flyby":
         half = a.half or 12.0
         times = np.linspace(-half, half, a.frames)
-        path = export_sequence(flyby(), times, out, "flyby", a.n, half, meta=dict(case="flyby", v=0.6, M=1.0))
+        path = export_sequence(flyby(), times, out, "flyby", a.n, half, meta=dict(case="flyby", speed=0.6, mass=1.0))
     else:
         half = a.half or 8.0
         times = np.linspace(-6.0, 6.0, a.frames)
-        path = export_sequence(growing_mass(), times, out, "growing_mass", a.n, half,
-                               meta=dict(case="growing_mass", M0=1.0, dM=1.0, t0=0.0, width=2.0))
+        path = export_sequence(cartan.growing_mass(), times, out, "growing_mass", a.n, half,
+                               meta=dict(case="growing_mass", mass=1.0, growth=1.0, at=0.0, width=2.0))
     print("wrote", path)
 
 

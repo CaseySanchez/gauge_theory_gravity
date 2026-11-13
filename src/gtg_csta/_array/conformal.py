@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from .. import algebra as al
+from . import to_generators
 from . import cartan
 from .curvature import curvature
 
@@ -37,7 +38,7 @@ def connection(coframe, f_fn=None, b_fn=None):
 
 
 def sectors(F_blade):
-    g = al.to_generators(F_blade)
+    g = to_generators(F_blade)
     return {k: g[..., s] for k, s in al.SECTORS.items()}
 
 

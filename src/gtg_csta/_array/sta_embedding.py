@@ -5,6 +5,7 @@ import numpy as np
 import jax.numpy as jnp
 
 from .. import algebra as al
+from . import to_generators
 from .fields import biv
 
 
@@ -24,7 +25,7 @@ def lorentz_rotor_field(B_ab_fn):
 
 def sector_leakage(F_blade) -> dict:
     """Max |component| of F outside the Lorentz sector, per sector P, K, D."""
-    g = al.to_generators(np.asarray(F_blade))
+    g = to_generators(np.asarray(F_blade))
     return {k: float(np.abs(g[..., s]).max()) for k, s in al.SECTORS.items() if k != "M"}
 
 

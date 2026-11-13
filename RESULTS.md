@@ -1,6 +1,6 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (121 tests, ~3.5 min). Demos:
+All checks below are executable: `source .venv/bin/activate && pytest` (126 tests, ~6 min, plus one slow test: `pytest -m slow tests/test_export.py`). Demos:
 `cd src && python -m gtg_csta.examples.scenarios` and `python -m gtg_csta.examples.render` (figures in `output/`).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
@@ -22,10 +22,28 @@ What is an extensor now:
 * Coframe `Spacetime <- Spacetime`, metric `g = e | e`, frame `E = e.inverse()`, Christoffel from `derivative(g)`,
   spin connection `Omega = ½ (W * (S ^ S)).contract(1,4).contract(2,3)` (two metric contractions), Ricci as a
   contraction `(S | F(E, S)).contract(1,2)`, Schouten from it, the quadratic density by two `.contract`s.
-* Still raw arrays: the `GEN` matrix (generator <-> blade coordinates, used only to *specify* test connections and in
-  the structure-constant test), the 16-unknown least-squares for the normal conditions (`jax.jacfwd` + `lstsq`,
-  assembled from extensor residuals), the Gauss-point scan over transport steps (a `lax.scan` on kernels), and the
-  ray tracer's Hamiltonian flow. Nothing in numga's linear-algebra extensions (`solve`, `lstsq`, `eigh`) was needed except `inverse`.
+* Written in numga's own idiom (after reading `numga/examples`): module-level named types, small named functions with
+  docstrings, no `lambda` and no `jax.numpy` in the package (JAX only for `derivative`, and `jit`/`scan` inside the
+  functions that need them). Geometries are identity-plus-dyad expressions (`Spacetime + shift * (t | Spacetime)`),
+  a boost is a rotor sandwich (`rotor >> Spacetime`), test fields are random polynomials in the position built from
+  multilinear maps (`c0 + c1(x) + c2(x, x)`), batches of positions/steps/loops are extensor batch axes, and the
+  ordered product of step versors is `cumprod`.
+* Still arrays: the `GEN` matrix (generator <-> blade coordinates, used to specify test connections and in the
+  structure-constant test), the 16-unknown least squares for the normal conditions (numpy `lstsq` on columns built
+  from extensor residuals), the carry flags of the ray tracer's `lax.scan`, and `permute_inputs` (numga has no
+  axis permutation for multilinear maps; it transposes the kernel).
+* The ray tracer now uses the CSTA's own connection: the momentum is a frame vector, `dk/dλ = -Ω(dx/dλ).commutator(k)`,
+  the geodesic equation as parallel transport; it reproduces the shadow radius (0.1670 vs 0.1681 rad at 160×120)
+  exactly as the earlier autodiff-of-the-Hamiltonian version did.
+
+## JAX on the GPU (RTX 3060, `jax[cuda12]`)
+
+`jit` of two extensor chains that share subexpressions returned wrong values for the second one on the GPU
+(~1e-19 instead of 4e-3; correct on CPU and for each chain alone). It is XLA's Triton fusion of float64 dots:
+`--xla_gpu_enable_triton_gemm=false` (or disabling the `cse` pass) fixes it. The package sets the flag before JAX starts
+(`gtg_csta/__init__.py`). Without it, exports and the vacuum identities in `tests/test_export.py -m slow` fail.
+The earlier `jit(vmap(holonomy_loop))` failure was on CPU and its cause was not identified; the holonomy map now
+evaluates its loops as one extensor batch instead.
 
 ## Verified (Tier A, spec sections 2-8)
 

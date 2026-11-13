@@ -4,6 +4,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 
 from .. import algebra as al
+from . import to_generators
 from .fields import biv, partials
 
 PAIRS = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
@@ -62,5 +63,5 @@ def bianchi_residual(omega, method: str = "jax", h: float = 1e-4):
 
 def sector_split(F_blade):
     """Blade coefficients (..., 15) -> dict of sector coordinates {M,P,K,D}."""
-    g = al.to_generators(jnp.asarray(F_blade))
+    g = to_generators(jnp.asarray(F_blade))
     return {k: g[..., s] for k, s in al.SECTORS.items()}

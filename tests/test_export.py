@@ -46,12 +46,16 @@ def test_series_file(tmp_path):
 
 
 @pytest.mark.slow
-def test_tiny_slice_of_schwarzschild_flyby_has_expected_fields(tmp_path):
-    """Pointwise fields on a 3x3x3 grid: vacuum has Ricci = 0, Cotton = 0, torsion = 0, and the invariant is the
-    boosted Kretschmann.  Not part of the default run (it triggers JAX compilation of the curvature chain)."""
-    out = ex.export_sequence(ex.flyby(v=0.6), [0.0], tmp_path, "tiny", n=3, half=6.0, chunk=8)
-    img, to_np = _read(tmp_path / "tiny_0000.vtkhdf")
+def test_small_slice_of_schwarzschild_flyby_has_expected_fields(tmp_path):
+    """Fields on a 4x4x4 grid (even, so no point lies near the singularity): in vacuum Ricci = 0, Cotton = 0,
+    torsion = 0, and the normal-connection density equals the Lorentz-only one. Triggers JAX compilation of the whole
+    curvature chain on a batch of positions."""
+    out = ex.export_sequence(ex.flyby(speed=0.6), [0.0], tmp_path, "small", n=4, half=6.0, chunk=16)
+    img, to_np = _read(tmp_path / "small_0000.vtkhdf")
     pd = img.GetPointData()
-    assert np.abs(to_np(pd.GetArray("ricci_scalar"))).max() < 1e-8
-    assert to_np(pd.GetArray("F_K")).max() < 1e-8 and to_np(pd.GetArray("F_P")).max() < 1e-8
-    assert out.name == "tiny.vtkhdf.series"
+    field = lambda name: to_np(pd.GetArray(name)).astype(float)
+    assert np.abs(field("ricci_scalar")).max() < 1e-8
+    assert field("F_K").max() < 1e-8 and field("F_P").max() < 1e-8 and field("F_D").max() < 1e-8
+    assert np.abs(field("weyl2_half") - field("riem2_half")).max() < 1e-8 * (1 + np.abs(field("riem2_half")).max())
+    assert field("riem2_half").max() > 1e-5 and field("valid").min() == 1
+    assert out.name == "small.vtkhdf.series"

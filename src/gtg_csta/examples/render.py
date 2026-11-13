@@ -1,11 +1,19 @@
 """Renderings of the Schwarzschild gauge field in the CSTA formulation.
 
-From ./src:  python -m gtg_csta.examples.render [slices holonomy lensing ...]   (figures -> ../output)
+From ./src:  python -m gtg_csta.examples.render [slices holonomy lensing lensing_gif]   (figures -> ../output)
 Painleve-Gullstrand coordinates are regular across the horizon, so grids may run down to the centre.
+
+The rays are followed with the gauge theory of gravity's own objects: a ray's momentum `k` is a vector of the
+local frame, its position `x` an event, and the frame is carried by the Lorentz connection of the CSTA,
+
+    dx/dlambda = E(k),        dk/dlambda = -1/2 [Omega(dx/dlambda), k],
+
+i.e. the momentum is parallel transported along its own path (the geodesic equation in the frame).
 """
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import matplotlib
@@ -13,167 +21,192 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import numpy as np
-import jax
-import jax.numpy as jnp
+from numga import where
+from numga.extensor import Extensor
 
-from .. import algebra as al, cartan, conformal as cf, curvature as cv
-from .. import invariants as iv, transport as tp
+from .. import algebra as al, cartan, conformal as cf, export, transport as tp
 
 OUT = Path(__file__).resolve().parents[3] / "output"
 OUT.mkdir(exist_ok=True)
 M = 1.0
-COF = cartan.painleve_gullstrand(M)
-OMEGA = cartan.lorentz_connection(COF)
+Spacetime = al.Spacetime
+COFRAME = cartan.schwarzschild(M)                                 # position -> (Spacetime <- Spacetime)
+LORENTZ = cartan.lorentz_connection(COFRAME)                      # position -> (Bivector <- Spacetime)
+State = tuple[Extensor, Extensor]                                 # (event, frame momentum)
 
 
-def _grid(half=6.0, n=121):
-    u = np.linspace(-half, half, n)
-    X, Y = np.meshgrid(u, u)
-    return u, X, Y
+# --- field-strength slice and holonomy map ---------------------------------------------------------
+def grid(half: float = 6.0, n: int = 121) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    axis = np.linspace(-half, half, n)
+    X, Y = np.meshgrid(axis, axis)
+    return axis, X, Y
 
 
-def _eval_on_plane(fn, X, Y, z=0.37, t=0.0):
-    """vmap fn(x4) over a slice at height z (offset so r never hits exactly 0)."""
-    pts = jnp.stack([jnp.full(X.size, t), X.ravel(), Y.ravel(), jnp.full(X.size, z)], axis=-1)
-    return np.asarray(jax.jit(jax.vmap(lambda k: fn(al.point(k))))(pts))
+def plane_points(X: np.ndarray, Y: np.ndarray, height: float = 0.37, time: float = 0.0) -> np.ndarray:
+    """Spacetime points (N, 4) on a horizontal plane, offset from z = 0 so that r never vanishes."""
+    return np.stack([np.full(X.size, time), X.ravel(), Y.ravel(), np.full(X.size, height)], axis=-1)
 
 
-def _horizon(ax):
+def horizon(ax) -> None:
     ax.add_patch(plt.Circle((0, 0), 2 * M, fill=False, color="w", lw=1, ls="--"))
 
 
-def slices(half=6.0, n=101):
-    u, X, Y = _grid(half, n)
-    I = lambda x: iv.quadratic_invariant(COF, OMEGA)(x).kernel.reshape(())
-    sec_fn = lambda x: jnp.array([jnp.abs(al.sector(cv.curvature(OMEGA)(x), k).kernel).max() for k in "MPKD"])
-    inv = _eval_on_plane(I, X, Y).reshape(X.shape)
-    sec = _eval_on_plane(sec_fn, X, Y).reshape(*X.shape, 4)
-    r = np.sqrt(X ** 2 + Y ** 2 + 0.37 ** 2)
-    print("slices: max |I - 24 M^2/r^6| =", np.abs(inv - 24 * M ** 2 / r ** 6).max())
+def slices(half: float = 6.0, n: int = 101) -> None:
+    """The gauge-invariant density, the Lorentz-sector curvature size and the translation-sector shift on a plane."""
+    _, X, Y = grid(half, n)
+    height = 0.37
+    data = export.evaluate_points(COFRAME, plane_points(X, Y, height))
+    density = data["riem2_half"].reshape(X.shape)
+    curvature_size = data["F_M"].reshape(X.shape)
+    shift = np.linalg.norm(data["shift"], axis=-1).reshape(X.shape)
+    r = np.sqrt(X ** 2 + Y ** 2 + height ** 2)
+    print("slices: max |I - 24 M^2/r^6| =", np.abs(density - 24 * M ** 2 / r ** 6).max())
     fig, ax = plt.subplots(1, 3, figsize=(14, 4.2))
-    im = ax[0].imshow(np.abs(inv) + 1e-12, extent=[-half, half, -half, half], origin="lower",
-                      norm=LogNorm(1e-4, 1e3), cmap="inferno")
-    ax[0].set_title("<F F~> = C^2/2  (gauge-invariant)"); fig.colorbar(im, ax=ax[0])
-    shift = np.sqrt(2 * M / r)
-    im = ax[1].imshow(sec[..., 0] + 1e-12, extent=[-half, half, -half, half], origin="lower",
-                      norm=LogNorm(1e-3, 1e1), cmap="magma")
-    ax[1].set_title("max |F_M| (frame-dependent component size)"); fig.colorbar(im, ax=ax[1])
-    im = ax[2].imshow(shift, extent=[-half, half, -half, half], origin="lower", vmin=0, vmax=2, cmap="viridis")
+    extent = [-half, half, -half, half]
+    image = ax[0].imshow(np.abs(density) + 1e-12, extent=extent, origin="lower", norm=LogNorm(1e-4, 1e3), cmap="inferno")
+    ax[0].set_title("<F F~> = C^2/2  (gauge-invariant)"); fig.colorbar(image, ax=ax[0])
+    image = ax[1].imshow(curvature_size + 1e-12, extent=extent, origin="lower", norm=LogNorm(1e-3, 1e1), cmap="magma")
+    ax[1].set_title("|F_M| (frame-dependent component size)"); fig.colorbar(image, ax=ax[1])
+    image = ax[2].imshow(shift, extent=extent, origin="lower", vmin=0, vmax=2, cmap="viridis")
     ax[2].set_title("translation sector: shift |beta| = sqrt(2M/r)\n(gauge dependent; =1 at horizon)")
-    fig.colorbar(im, ax=ax[2])
+    fig.colorbar(image, ax=ax[2])
     for a in ax:
-        _horizon(a); a.set_xlabel("x"); a.set_ylabel("y")
+        horizon(a); a.set_xlabel("x"); a.set_ylabel("y")
     fig.suptitle("Schwarzschild in CSTA, PG tetrad; slice z=0.37, horizon dashed (r=2M)")
     fig.tight_layout(); fig.savefig(OUT / "render_slices.png", dpi=130)
-    # sectors P,K,D identically zero for the vacuum normal connection
-    print("slices: max |F_P|,|F_K|,|F_D| =", [float(sec[..., i].max()) for i in (1, 2, 3)])
+    print("slices: max |F_P|, |F_K|, |F_D| =", [float(data[k].max()) for k in ("F_P", "F_K", "F_D")])
 
 
-def holonomy_map(half=6.0, n=41, eps=0.4, steps=10):
-    """||T_loop - 1|| for an eps-square loop in the (x,y) plane centred on each grid point."""
-    u, X, Y = _grid(half, n)
-    one = jnp.eye(1, 32)[0]
-    Om = cf.connection(COF)                       # full 15-sector connection: Lorentz + translation (f=b=0)
+def holonomy_map(half: float = 6.0, n: int = 41, size: float = 0.4, steps: int = 10, chunk: int = 256) -> None:
+    """max |T_loop - 1| for a size x size loop in the (x,y) plane centred on each grid point: the full conformal
+    connection's holonomy, a batch of loops through one compiled evaluation."""
+    import jax
 
-    def dev(x):
-        T = tp.holonomy_loop(Om, x - 0.5 * eps * jnp.array([0, 1.0, 1.0, 0]), 1, 2, eps, steps, "magnus4")
-        return jnp.abs(T - one).max()
+    _, X, Y = grid(half, n)
+    centres = plane_points(X, Y)
+    connection = cf.connection(COFRAME)
+    identity = np.eye(1, 32)[0]
 
-    pts = jnp.stack([jnp.zeros(X.size), X.ravel(), Y.ravel(), jnp.full(X.size, 0.37)], axis=-1)
-    # lax.map, not jit(vmap): jit(vmap(holonomy)) returns wrong values for batches >~ 16 (see RESULTS.md)
-    h = np.asarray(jax.jit(lambda P: jax.lax.map(dev, P))(pts)).reshape(X.shape)
+    @jax.jit
+    def around(starts: Extensor) -> Extensor:
+        return tp.holonomy_loop(connection, starts, 1, 2, size, steps, "magnus4")
+
+    corners = centres - 0.5 * size * np.array([0.0, 1.0, 1.0, 0.0])               # loops centred on the points
+    deviation = []
+    for start in range(0, len(corners), chunk):
+        block = corners[start:start + chunk]
+        padding = chunk - len(block)
+        block = np.concatenate([block, np.repeat(block[-1:], padding, axis=0)]) if padding else block
+        kernel = np.asarray(around(al.point(block[:, None, :])).kernel)
+        deviation.append(np.abs(kernel - identity).max(axis=-1)[:chunk - padding])
+    holonomy = np.concatenate(deviation).reshape(X.shape)
     fig, ax = plt.subplots(figsize=(5.4, 4.6))
-    im = ax.imshow(h + 1e-14, extent=[-half, half, -half, half], origin="lower", norm=LogNorm(1e-4, 1e1), cmap="inferno")
-    fig.colorbar(im, ax=ax, label="max |T_loop - 1|"); _horizon(ax)
-    ax.set_title(f"holonomy of the full conformal connection\n{eps}x{eps} loops in (x,y)")
+    image = ax.imshow(holonomy + 1e-14, extent=[-half, half, -half, half], origin="lower",
+                      norm=LogNorm(1e-4, 1e1), cmap="inferno")
+    fig.colorbar(image, ax=ax, label="max |T_loop - 1|"); horizon(ax)
+    ax.set_title(f"holonomy of the full conformal connection\n{size}x{size} loops in (x,y)")
     fig.tight_layout(); fig.savefig(OUT / "render_holonomy.png", dpi=130)
-    print("holonomy_map: min/max =", h.min(), h.max())
+    print("holonomy_map: min/max =", holonomy.min(), holonomy.max())
 
 
-# ---------------- ray tracing ----------------
-
-def _hamiltonian(x, p):
-    g = cartan.metric(COF)(al.point(x)).kernel[0]
-    return 0.5 * p @ jnp.linalg.solve(g, p)
-
-
-_dH = jax.grad(_hamiltonian, argnums=(0, 1))
+# --- ray tracing ---------------------------------------------------------------------------------
+def radius_of(position: Extensor) -> Extensor:
+    """The Cartesian radius of a position, a scalar."""
+    return (-cartan.SpacePart(position).squared()).square_root()
 
 
-def _rhs(s):
-    x, p = s
-    dx, dp = _dH(x, p)
-    return (dp, -dx)                                   # dx/dlam = dH/dp,  dp/dlam = -dH/dx
+def dynamics(position: Extensor, momentum: Extensor) -> State:
+    """The rates of a ray: the coordinate velocity is the momentum carried out of the frame, `E(k)`, and the frame
+    momentum is parallel transported by the Lorentz connection along it, `-1/2 [Omega(velocity), k]`."""
+    velocity = COFRAME(position).inverse()(momentum).cast(Spacetime)
+    transport_rate = -LORENTZ(position)(velocity).commutator(momentum)
+    return velocity, transport_rate.cast(Spacetime)
 
 
-def _rk4(s, h):
-    add = lambda a, b, c: jax.tree_util.tree_map(lambda u, v: u + c * v, a, b)
-    k1 = _rhs(s); k2 = _rhs(add(s, k1, h / 2)); k3 = _rhs(add(s, k2, h / 2)); k4 = _rhs(add(s, k3, h))
-    return jax.tree_util.tree_map(lambda u, a, b, c, d: u + h / 6 * (a + 2 * b + 2 * c + d), s, k1, k2, k3, k4)
+def runge_kutta(rates: Callable[..., State], state: State, size: Extensor) -> State:
+    """One fourth-order step of a state, a tuple of extensors, along its rates."""
+    first = rates(*state)
+    second = rates(*(value + rate * (size / 2) for value, rate in zip(state, first)))
+    third = rates(*(value + rate * (size / 2) for value, rate in zip(state, second)))
+    fourth = rates(*(value + rate * size for value, rate in zip(state, third)))
+    return tuple((value + (a + 2 * b + 2 * c + d) * (size / 6)).cast(Spacetime)
+                 for value, a, b, c, d in zip(state, first, second, third, fourth))
 
 
-def _static_camera(D, fov, nx, ny, incl=np.radians(20.0)):
-    """Initial (x, p) for every pixel: a static observer at distance D, elevated by `incl` above the disk plane
-    (z = 0), looking at the hole.  The ray tangent is the arriving photon's momentum k = u - n (traced
-    backward with a negative step).  Returns also the image-plane half-width tan(fov/2)."""
-    x0 = jnp.array([0.0, D * np.cos(incl), 0.0, D * np.sin(incl)])
-    g = cartan.metric(COF)(al.point(x0)).kernel[0]
-    u = jnp.array([1.0, 0, 0, 0]); u = u / jnp.sqrt(u @ g @ u)
-    # spatial triad in coordinates: outward r, right = z x r, up = r x right; then orthonormalise wrt g, orthogonal to u
-    rh = np.array(x0[1:]) / D
-    right = np.cross([0, 0, 1.0], rh); right /= np.linalg.norm(right)
-    up = np.cross(rh, right)
-    def proj(v, basis):
-        for b in basis:
-            v = v - (v @ g @ b) / (b @ g @ b) * b
-        return v
-    es = []
-    for d in (rh, right, up):
-        v = proj(jnp.concatenate([jnp.zeros(1), jnp.asarray(d)]), [u] + es)
-        es.append(v / jnp.sqrt(-(v @ g @ v)))
-    ex, ey, ez = es                                    # outward, right, up
-    a = np.tan(fov / 2)
-    sx = np.linspace(-a, a, nx); sy = np.linspace(-a * ny / nx, a * ny / nx, ny)
+def orthonormal(vector: Extensor, previous: list[Extensor]) -> Extensor:
+    """The unit vector along `vector` once its parts along `previous` are removed (frame metric)."""
+    for other in previous:
+        vector = vector - ((vector | other) / (other | other)) * other
+    return vector / (-(vector | vector)).square_root()
+
+
+def static_camera(distance: float, field_of_view: float, nx: int, ny: int,
+                  inclination: float = np.radians(20.0)) -> tuple[State, float]:
+    """Initial state for every pixel: a static observer at `distance`, `inclination` above the disk plane (z = 0),
+    looking at the hole. The ray's frame momentum is the arriving photon's, `k = u - n` for the unit direction n
+    the pixel looks along, traced backward with a negative step. Also returns the image plane's half-width."""
+    position = al.point([0.0, distance * np.cos(inclination), 0.0, distance * np.sin(inclination)])
+    frame = COFRAME(position)
+    observer = frame(al.t)
+    observer = observer / (observer | observer).square_root()                  # the static observer's frame velocity
+    # Spatial triad in coordinates (outward, right, up), carried into the frame and orthonormalised there.
+    outward = np.array([np.cos(inclination), 0.0, np.sin(inclination)])
+    right = np.cross([0.0, 0.0, 1.0], outward)
+    right /= np.linalg.norm(right)
+    up = np.cross(outward, right)
+    triad = []
+    for direction in (outward, right, up):
+        triad.append(orthonormal(frame(al.point([0.0, *direction])), [observer, *triad]))
+    towards, across, upward = triad
+    half = np.tan(field_of_view / 2)
+    sx = np.linspace(-half, half, nx)
+    sy = np.linspace(-half * ny / nx, half * ny / nx, ny)
     SX, SY = np.meshgrid(sx, sy)
-    n = (-ex)[None] + SX.ravel()[:, None] * ey[None] + SY.ravel()[:, None] * ez[None]   # unnormalised direction
-    nn = jnp.sqrt(-jnp.einsum("pa,ab,pb->p", n, g, n))
-    n = n / nn[:, None]                                # unit spatial vector, looking direction
-    k = u[None] - n                                    # arriving photon's tangent (future-directed, null)
-    p = jnp.einsum("ab,pb->pa", g, k)
-    return jnp.broadcast_to(x0, (p.shape[0], 4)), p, a
+    looking = -towards + al.mv.scalar(SX.reshape(-1, 1)) * across + al.mv.scalar(SY.reshape(-1, 1)) * upward
+    looking = looking / (-(looking | looking)).square_root()                    # [pixels] unit spatial direction
+    momentum = (observer - looking).cast(Spacetime)                             # [pixels] the photon's frame momentum
+    events = (position + 0 * looking).cast(Spacetime)                           # [pixels] the camera's event, per pixel
+    return (events, momentum), half
 
 
-def _trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl):
-    """Backward-trace every pixel.  Returns a dict of per-pixel arrays: `escaped`, `sky` (unit direction the
-    ray reaches at infinity), `hit` (crossed the disk), `hr`, `hphi` (radius and azimuth of the nearest disk
-    crossing), and the image-plane half-width `a`."""
-    x0, p0, a = _static_camera(D, fov, nx, ny, incl)
-    h0 = 0.03
+def trace_scene(nx: int, ny: int, distance: float, field_of_view: float, steps: int, r_in: float, r_out: float,
+                inclination: float) -> dict:
+    """Backward-trace every pixel. Returns per-pixel arrays: `escaped`, `sky` (the unit direction the ray reaches at
+    infinity), `hit` (it crossed the disk), `hr` and `hphi` (radius and azimuth of the nearest crossing) and `a`, the
+    image plane's half-width. A ray traced back to r < 2.2 M is classed black: in the PG chart a backward ray
+    hugging the horizon continues onto an unphysical branch."""
+    import jax
 
-    def trace(x, p):
-        def body(c, _):
-            (xx, pp), hit, hr, hp, alive = c
-            r = jnp.linalg.norm(xx[1:])
-            h = -h0 * jnp.clip(r, 1.0, 10.0)            # backward in affine parameter
-            xn, pn = _rk4((xx, pp), h)
-            crossed = (xx[3] * xn[3] < 0) & alive & (~hit)
-            mid = 0.5 * (xx[1:] + xn[1:])
-            rc = jnp.linalg.norm(mid)
-            on = crossed & (rc > r_in) & (rc < r_out)
-            hit = hit | on
-            hr = jnp.where(on, rc, hr)
-            hp = jnp.where(on, jnp.arctan2(mid[1], mid[0]), hp)
-            rn = jnp.linalg.norm(xn[1:])
-            alive = alive & (rn > 2.2 * M) & (rn < 120.0)      # traced back to the horizon: emitted by nothing (black)
-            xn = jnp.where(alive, xn, xx); pn = jnp.where(alive, pn, pp)
-            return ((xn, pn), hit, hr, hp, alive), None
-        c0 = ((x, p), False, 0.0, 0.0, True)
-        ((xf, pf), hit, hr, hp, alive), _ = jax.lax.scan(body, c0, None, length=steps)
-        return xf, hit, hr, hp
+    start, half = static_camera(distance, field_of_view, nx, ny, inclination)
+    pixels = nx * ny
+    base_step = 0.03
 
-    xs, hit, hr, hp = map(np.asarray, jax.jit(jax.vmap(trace))(x0, p0))
-    rf = np.linalg.norm(xs[:, 1:], axis=1)
-    return dict(escaped=rf > 100.0, sky=xs[:, 1:] / np.maximum(rf, 1e-9)[:, None], hit=hit, hr=hr, hphi=hp, a=a)
+    def step(carry, _):
+        state, alive, hit, crossing = carry
+        radius = radius_of(state[0])
+        size = -base_step * radius.clip(1.0, 10.0)                              # backward in the affine parameter
+        moved = runge_kutta(dynamics, state, size)
+        crosses = (cartan.coordinate(state[0], 3) * cartan.coordinate(moved[0], 3) < 0) & alive & ~hit
+        midpoint = (0.5 * (state[0] + moved[0])).cast(Spacetime)
+        radius_there = radius_of(midpoint)
+        on_disk = crosses & (radius_there > r_in) & (radius_there < r_out)
+        crossing = where(on_disk, midpoint, crossing)
+        new_radius = radius_of(moved[0])
+        alive = alive & (new_radius > 2.2 * M) & (new_radius < 120.0)
+        state = tuple(where(alive, new, old) for new, old in zip(moved, state))
+        return (state, alive, hit | on_disk, crossing), None
+
+    def run(carry):
+        return jax.lax.scan(step, carry, None, length=steps)[0]
+
+    carry = (start, np.ones(pixels, dtype=bool), np.zeros(pixels, dtype=bool), start[0])
+    final, _, hit, crossing = jax.jit(run)(carry)
+    final_position = np.asarray(final[0].kernel)
+    crossed = np.asarray(crossing.kernel)
+    radius_final = np.linalg.norm(final_position[:, 1:], axis=1)
+    return dict(escaped=radius_final > 100.0, sky=final_position[:, 1:] / np.maximum(radius_final, 1e-9)[:, None],
+                hit=np.asarray(hit), hr=np.linalg.norm(crossed[:, 1:], axis=1),
+                hphi=np.arctan2(crossed[:, 2], crossed[:, 1]), a=half)
 
 
 def _shade(sc, nx, ny, r_in, r_out, t=0.0, sky_turn=0.0):
@@ -195,7 +228,7 @@ def _shade(sc, nx, ny, r_in, r_out, t=0.0, sky_turn=0.0):
 
 def lensing(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.0, incl=np.radians(20.0)):
     """Backward ray tracing of a thin accretion disk (z=0, r_in..r_out) and a checkered sky."""
-    sc = _trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl)
+    sc = trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl)
     img = _shade(sc, nx, ny, r_in, r_out)
     fig, ax = plt.subplots(figsize=(7.5, 5.8))
     ax.imshow(img, origin="lower"); ax.axis("off")
@@ -214,7 +247,7 @@ def lensing_gif(nx=160, ny=120, D=30.0, fov=0.5, steps=1800, r_in=6.0, r_out=14.
     """Animated GIF: the same traced image (one ray trace; Schwarzschild is static) with the disk turning
     differentially (Kepler), so that its two-armed pattern shears, in the direct and the lensed images alike.  `turns` is the number of inner-edge orbits in the loop."""
     from PIL import Image
-    sc = _trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl)
+    sc = trace_scene(nx, ny, D, fov, steps, r_in, r_out, incl)
     period = 2 * np.pi * r_in ** 1.5                      # orbital period at the inner edge
     imgs = []
     for k in range(frames):

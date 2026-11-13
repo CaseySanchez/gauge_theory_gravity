@@ -6,7 +6,6 @@ Convention fixed once here; all other modules import from this one.
 from __future__ import annotations
 
 import numpy as np
-import jax.numpy as jnp
 from numga import Algebra
 from numga.backend.jax import JaxContext
 
@@ -58,12 +57,12 @@ GEN_INV = np.linalg.inv(GEN)
 
 def to_blades(c):
     """Generator coordinates (..., 15) -> numga bivector blade coefficients (..., 15)."""
-    return jnp.einsum("ij,...j->...i", GEN, c)
+    return np.einsum("ij,...j->...i", GEN, c)
 
 
 def to_generators(b):
     """numga bivector blade coefficients (..., 15) -> generator coordinates (..., 15)."""
-    return jnp.einsum("ij,...j->...i", GEN_INV, b)
+    return np.einsum("ij,...j->...i", GEN_INV, b)
 
 
 def bivector(c_gen):
@@ -82,6 +81,7 @@ def structure_constants() -> np.ndarray:
 
 
 def scalar(a) -> float:
+    """The value of a scalar extensor, as a float."""
     return float(np.asarray(a.kernel).reshape(-1)[0])
 
 
@@ -104,17 +104,17 @@ CurvatureType = ALG.gatype((Bivector, Spacetime, Spacetime))         # F: Bivect
 
 def point(x4):
     """A spacetime position / direction (4 coefficients t,x,y,z) as an extensor."""
-    return CTX.extensor(Spacetime, jnp.asarray(x4))
+    return CTX.extensor(Spacetime, CTX.xp.asarray(x4))
 
 
 def connection_from_columns(cols):
     """Omega from its values on the coordinate vectors: cols (4, 15) blade coefficients -> Bivector <- Spacetime."""
-    return CTX.extensor(ConnectionType, jnp.asarray(cols).T)
+    return CTX.extensor(ConnectionType, CTX.xp.asarray(cols).T)
 
 
 def connection_columns(Omega):
     """(4, 15) blade coefficients of Omega(e_mu), mu = t,x,y,z."""
-    return jnp.asarray(Omega.kernel).T
+    return Omega.kernel.T
 
 
 # ----- sector projectors (Bivector <- Bivector), built from the null basis -----
@@ -134,4 +134,4 @@ def sector(B, name):
 
 def sector_size(B, name) -> float:
     """Largest coefficient magnitude of a sector of B (any batch/inputs)."""
-    return float(jnp.abs(sector(B, name).kernel).max())
+    return float(np.abs(np.asarray(sector(B, name).kernel)).max())

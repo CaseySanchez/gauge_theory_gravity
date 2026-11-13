@@ -1,57 +1,57 @@
 """Curvature (spec section 7), on extensors."""
 from __future__ import annotations
 
+from numga.extensor import Extensor
+
 from . import algebra as al
-from .fields import get_derivative, permute_inputs, even
-import jax.numpy as jnp
+from .covariant import covariant_derivative
+from .fields import Field, derivative_of, permute_inputs
 
 
-def curvature(omega, method: str = "jax", h: float = 1e-4):
-    """F(a,b) = a.grad Omega(b) - b.grad Omega(a) + 1/2 [Omega(a), Omega(b)]   (constant coordinate
-    vectors a,b, so the -Omega([a,b]) term drops; [X,Y] = XY - YX).
-    Returns x -> a map  Bivector <- (Spacetime, Spacetime).
+def curvature(omega: Field, method: str = "jax", step: float = 1e-4) -> Field:
+    """F(a,b) = a.grad Omega(b) - b.grad Omega(a) + 1/2 [Omega(a), Omega(b)]   (constant coordinate vectors a, b,
+    so the -Omega([a,b]) term drops; [X,Y] = XY - YX).  A map Bivector <- (Spacetime, Spacetime).
 
-    d = derivative(Omega) has the inputs (b, step a) = a.grad Omega(b); swapping them gives the other term,
-    and numga's `commutator` is (XY - YX)/2, exactly the 1/2 [Omega(a), Omega(b)] of the spec."""
-    dOm = get_derivative(method, h)(omega)
+    `d = derivative(Omega)` has the inputs (b, step a) = a.grad Omega(b); swapping them gives the other term, and
+    numga's `commutator` is (XY - YX)/2, exactly the 1/2 [Omega(a), Omega(b)] of the spec."""
+    gradient = derivative_of(method, step)(omega)
 
-    def F(x):
-        Om = omega(x)
-        d = dOm(x)                                 # Bivector <- (b, a): a . grad Omega(b)
-        return permute_inputs(d, (1, 0)) - d + Om.commutator(Om)
-    return F
+    def curved(x: Extensor) -> Extensor:
+        connection = omega(x)                                                            # Bivector <- Spacetime
+        d = gradient(x)                                                                  # Bivector <- (b, a)
+        return permute_inputs(d, (1, 0)) - d + connection.commutator(connection)         # Bivector <- (a, b)
 
-
-def commutator_of_D(omega, Psi, method: str = "jax", h: float = 1e-4):
-    """[D_a, D_b] Psi computed from the covariant derivative itself (second derivatives of Psi cancel):
-    a map Even <- (Spacetime a, Spacetime b)."""
-    from .covariant import covariant_derivative
-    dd = get_derivative(method, h)
-    D = covariant_derivative(omega, Psi, method, h)
-    dD = dd(D)
-
-    def C(x):
-        # D_a(D_b Psi) = a.grad(D_b Psi) + 1/2 Omega(a) (D_b Psi); inputs (b, a) -> reorder to (a, b)
-        DbPsi = D(x)                                # Even <- b
-        Om_Db = permute_inputs(omega(x) * DbPsi, (1, 0))      # Omega(a) D_b Psi, inputs reordered to (b, a)
-        T = dD(x) + 0.5 * Om_Db                     # Even <- (b, a)   [D_a D_b Psi]
-        DaDb = permute_inputs(T, (1, 0))            # Even <- (a, b):  D_a D_b Psi
-        return DaDb - permute_inputs(DaDb, (1, 0))
-    return C
+    return curved
 
 
-def bianchi_residual(omega, method: str = "jax", h: float = 1e-4):
-    """Cyclic sum over (l,a,b) of  D_l F(a,b) = d_l F(a,b) + 1/2 [Omega(l), F(a,b)]; must vanish.
-    Returns x -> a map Bivector <- (Spacetime, Spacetime, Spacetime)."""
-    F = curvature(omega, method, h)
-    dF = get_derivative(method, h)(F)
+def commutator_of_derivatives(omega: Field, spinor: Field, method: str = "jax", step: float = 1e-4) -> Field:
+    """[D_a, D_b] Psi from the covariant derivative itself (second derivatives of Psi cancel): a map
+    Even <- (Spacetime a, Spacetime b)."""
+    covariant = covariant_derivative(omega, spinor, method, step)
+    gradient = derivative_of(method, step)(covariant)
 
-    def R(x):
-        T = permute_inputs(dF(x), (2, 0, 1)) + omega(x).commutator(F(x))      # inputs (l, a, b)
-        return T + permute_inputs(T, (2, 0, 1)) + permute_inputs(T, (1, 2, 0))
-    return R
+    def commutator(x: Extensor) -> Extensor:
+        # D_a (D_b Psi) = a.grad (D_b Psi) + 1/2 Omega(a) (D_b Psi), with the inputs of Omega(a) D_b Psi reordered to (b, a).
+        rotation = permute_inputs(omega(x) * covariant(x), (1, 0))                       # Even <- (b, a)
+        twice = permute_inputs(gradient(x) + 0.5 * rotation, (1, 0))                     # Even <- (a, b): D_a D_b Psi
+        return twice - permute_inputs(twice, (1, 0))
+
+    return commutator
 
 
-def sector_split(F):
-    """{M,P,K,D} parts of a bivector-valued extensor, by the null-basis projectors."""
-    return {k: al.sector(F, k) for k in al.SECTOR_MAPS}
+def bianchi_residual(omega: Field, method: str = "jax", step: float = 1e-4) -> Field:
+    """The cyclic sum over (l,a,b) of D_l F(a,b) = d_l F(a,b) + 1/2 [Omega(l), F(a,b)]; it must vanish.
+    A map Bivector <- (Spacetime, Spacetime, Spacetime)."""
+    gradient = derivative_of(method, step)(curvature(omega, method, step))
+    strength = curvature(omega, method, step)
+
+    def residual(x: Extensor) -> Extensor:
+        covariant = permute_inputs(gradient(x), (2, 0, 1)) + omega(x).commutator(strength(x))     # inputs (l, a, b)
+        return covariant + permute_inputs(covariant, (2, 0, 1)) + permute_inputs(covariant, (1, 2, 0))
+
+    return residual
+
+
+def sector_split(strength: Extensor) -> dict[str, Extensor]:
+    """The M, P, K, D parts of a bivector-valued extensor, by the null-basis projectors."""
+    return {name: al.sector(strength, name) for name in al.SECTOR_MAPS}
