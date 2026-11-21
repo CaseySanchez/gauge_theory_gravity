@@ -111,7 +111,7 @@ Finite gauge transformations, meanwhile, are represented by CSTA versors,
 
 $$
 \boxed{
-V(x)\in\operatorname{Spin}(2,4).
+V(x)\in\mathrm{Spin}(2,4).
 }
 $$
 
@@ -155,9 +155,8 @@ $$
 where the metric is
 
 $$
-\eta_{AB}
-=
-\operatorname{diag}(+1,-1,-1,-1,+1,-1).
+\eta_{AB} =
+\mathrm{diag}(+1,-1,-1,-1,+1,-1).
 $$
 
 Consequently,
@@ -180,11 +179,8 @@ $$
 Its bivector subspace has dimension
 
 $$
-\dim\mathcal G^2
-=
-\binom{6}{2}
-=
-15.
+\dim\mathcal G^2 =
+\binom{6}{2} = 15.
 $$
 
 These 15 bivectors generate the Lie algebra
@@ -336,8 +332,7 @@ It generates local scale transformations.
 The conformal bivector space therefore decomposes as
 
 $$
-\mathfrak{so}(2,4)
-=
+\mathfrak{so}(2,4) =
 \mathfrak{so}(1,3)
 \oplus
 \mathfrak p
@@ -363,8 +358,7 @@ The fundamental gauge field is
 
 $$
 \boxed{
-\Omega(a,x)
-=
+\Omega(a,x) =
 \frac12\omega^{AB}(a,x)
 \mathbf e_A\wedge\mathbf e_B.
 }
@@ -419,7 +413,7 @@ A central feature of the proposed formulation is that finite gauge transformatio
 Let
 
 $$
-V(x)\in\operatorname{Spin}(2,4).
+V(x)\in\mathrm{Spin}(2,4).
 $$
 
 For a normalized spin versor,
@@ -458,10 +452,8 @@ The connection transforms according to
 
 $$
 \boxed{
-\Omega'(a,x)
-=
-V\Omega(a,x)\widetilde V
--
+\Omega'(a,x) =
+V\Omega(a,x)\widetilde V -
 2(a\cdot\nabla V)\widetilde V.
 }
 $$
@@ -484,10 +476,8 @@ Define
 
 $$
 \boxed{
-\mathcal D_a\Psi
-=
-a\cdot\nabla\Psi
-+
+\mathcal D_a\Psi =
+a\cdot\nabla\Psi +
 \frac12\Omega(a,x)\Psi.
 }
 $$
@@ -503,8 +493,7 @@ The factor of $1/2$ follows the conventional spin representation of bivector gen
 The derivative is constructed so that
 
 $$
-\mathcal D'_a\Psi'
-=
+\mathcal D'_a\Psi' =
 V\mathcal D_a\Psi.
 $$
 
@@ -521,8 +510,7 @@ $$
 \begin{aligned}
 \mathcal F(a,b)
 ={}&
-a\cdot\nabla\Omega(b)
--
+a\cdot\nabla\Omega(b) -
 b\cdot\nabla\Omega(a)\\
 &+
 \frac12[\Omega(a),\Omega(b)].
@@ -562,8 +550,7 @@ The curvature is related to the commutator of covariant derivatives through
 
 $$
 \boxed{
-[\mathcal D_a,\mathcal D_b]\Psi
-=
+[\mathcal D_a,\mathcal D_b]\Psi =
 \frac12\mathcal F(a,b)\Psi
 }
 $$
@@ -575,14 +562,10 @@ for constant commuting directional vectors.
 Because the connection contains four conformal sectors, its curvature can also be decomposed:
 
 $$
-\mathcal F
-=
-\mathcal F_{\mathrm{Lorentz}}
-+
-\mathcal F_{\mathrm{translation}}
-+
-\mathcal F_{\mathrm{special}}
-+
+\mathcal F =
+\mathcal F_{\mathrm{Lorentz}} +
+\mathcal F_{\mathrm{translation}} +
+\mathcal F_{\mathrm{special}} +
 \mathcal F_{\mathrm{dilation}}.
 $$
 
@@ -598,8 +581,7 @@ Along a path $\gamma$, define
 
 $$
 \boxed{
-V(x_1,x_2)
-=
+V(x_1,x_2) =
 \mathcal P
 \exp\left(
 -\frac12
@@ -684,8 +666,7 @@ The additional generators permit the representation of translations, dilations, 
 A natural restriction is
 
 $$
-\Omega(a,x)
-=
+\Omega(a,x) =
 \frac12\omega^{ab}(a,x)
 \mathbf e_a\wedge\mathbf e_b.
 $$
@@ -805,10 +786,10 @@ The proposed theory can be summarized by the following objects.
 | Object | Mathematical representation | Purpose |
 |---|---|---|
 | Algebra | $\mathrm{Cl}(2,4;\mathbb R)$ | Underlying conformal geometry |
-| Gauge group | $\operatorname{Spin}(2,4)$ | Finite conformal transformations |
+| Gauge group | $\mathrm{Spin}(2,4)$ | Finite conformal transformations |
 | Gauge algebra | $\mathfrak{so}(2,4)$ | Infinitesimal conformal transformations |
 | Gauge connection | $\Omega(a,x)\in\mathrm{Cl}^{2}(2,4)$ | Infinitesimal gauge field |
-| Gauge transformation | $V(x)\in\operatorname{Spin}(2,4)$ | Finite gauge transformation |
+| Gauge transformation | $V(x)\in\mathrm{Spin}(2,4)$ | Finite gauge transformation |
 | Covariant derivative | $\mathcal D_a$ | Gauge-covariant differentiation |
 | Curvature | $\mathcal F(a,b)\in\mathrm{Cl}^{2}(2,4)$ | Gauge-field strength |
 | Parallel transport | $V(x_1,x_2)$ | Finite transport between points |
@@ -817,8 +798,7 @@ The central relationships are
 
 $$
 \boxed{
-\Omega(a,x)
-=
+\Omega(a,x) =
 \frac12\omega^{AB}(a,x)
 \mathbf e_A\wedge\mathbf e_B
 }
@@ -832,22 +812,17 @@ $$
 
 $$
 \boxed{
-\mathcal D_a\Psi
-=
-a\cdot\nabla\Psi
-+
+\mathcal D_a\Psi =
+a\cdot\nabla\Psi +
 \frac12\Omega(a,x)\Psi
 }
 $$
 
 $$
 \boxed{
-\mathcal F(a,b)
-=
-a\cdot\nabla\Omega(b)
--
-b\cdot\nabla\Omega(a)
-+
+\mathcal F(a,b) =
+a\cdot\nabla\Omega(b) -
+b\cdot\nabla\Omega(a) +
 \frac12[\Omega(a),\Omega(b)].
 }
 $$
