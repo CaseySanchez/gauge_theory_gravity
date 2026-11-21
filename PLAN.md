@@ -1,6 +1,6 @@
 # Plan: Simulating Gauge Theory Gravity in Conformal Spacetime Algebra with `numga`
 
-Sources: `gauge_theory_gravity_conformal_spacetime_algebra.md` (the "spec") and the matching PDF.
+Sources: the proposal in [README.md](README.md) (the "spec") and the matching PDF.
 Library: `numga/` (vendored in this directory, v2.0.0a0, NumPy/JAX/PyTorch backends).
 
 ## 0. Goal and scope
@@ -39,7 +39,7 @@ The spec says plainly that it is not yet a complete gravitational theory: there 
 gauge_theory_gravity/
   PLAN.md
   numga/                      # vendored library (unchanged)
-  gtg_csta/
+  gauge_theory_gravity/
     __init__.py
     algebra.py                # Cl(2,4) construction, bases, null basis, generators
     connection.py             # Ω(a,x): storage, sector split/assemble, field on a grid
@@ -149,7 +149,7 @@ This phase is exploratory. Each subsection ends in a recorded outcome, including
 
 ### Phase 8: Demonstrations and write-up
 
-Runnable scenarios (numga style, `python -m gtg_csta.examples.<name>`):
+Runnable scenarios (numga style, `python -m gauge_theory_gravity.examples.<name>`):
 
 1. **Gauge orbits:** random V(x); show Ω → Ω' while F → V F Ṽ; invariant scalar ⟨F F̃⟩ constant.
 2. **Pure-gauge vs curved connection:** holonomy around loops, heat map of ‖holonomy − 1‖ vs loop area.

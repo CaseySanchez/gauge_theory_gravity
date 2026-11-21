@@ -6,8 +6,8 @@ import pytest
 
 vtk = pytest.importorskip("vtk")
 
-import gtg_csta  # noqa: F401
-from gtg_csta import export as ex
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import export as ex
 
 
 def _read(path):

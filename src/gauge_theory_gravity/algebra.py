@@ -87,34 +87,68 @@ def scalar(a) -> float:
 
 # ---------------------------------------------------------------------------------------------
 # Extensor types.  Everything downstream is written in terms of these.
+#
+# Orientation follows numga's conformal idiom: events and directions of spacetime are intrinsic antivectors
+# (the duals of t, x, y, z; grade 5 here), read by extrinsic vectors, the slices `t, x, y, z` that pair with
+# them through `slice & direction`.  The conformal origin and infinity are intrinsic points too, while the
+# connection, curvature and versors are extrinsic, as generators and motions are.
 # ---------------------------------------------------------------------------------------------
-from numga.gatype import Orientation  # noqa: E402
+from numga import stack  # noqa: E402
 
-_EXT = Orientation.extrinsic
 CTX = mv.context
-Scalar = ALG.gatype.scalar()
-Vector = ALG.gatype.vector()                      # all six directions
-Bivector = ALG.gatype.bivector()                  # the 15 generators of so(2,4)
-Even = ALG.gatype.even()                          # Spin(2,4) lives here
-Spacetime = ALG.gatype(ALG.subspace.from_blades("t x y z"), orientation=_EXT)          # the 4 directions a, x
-SpacetimeBivector = ALG.gatype(ALG.subspace.from_blades("tx ty tz xy xz yz"), orientation=_EXT)   # Lorentz sector
-ConnectionType = ALG.gatype((Bivector, Spacetime))                   # Omega: Bivector <- Spacetime
-CurvatureType = ALG.gatype((Bivector, Spacetime, Spacetime))         # F: Bivector <- (Spacetime, Spacetime)
+Scalar = ALG.gatype.scalar()                                   # Scalar+
+Vector = ALG.gatype.vector()                                   # Vector+, all six directions
+Bivector = ALG.gatype.bivector()                               # Bivector+, the 15 generators of so(2,4)
+Even = ALG.gatype.even()                                       # Even+, Spin(2,4) lives here
+# The slices that read spacetime directions: covectors, momenta, gradients.  Extrinsic vectors.
+Slice = Vector.derive.within(Algebra("t+x-y-z-"))              # Vector+
+# Events and directions of spacetime: intrinsic antivectors, each the dual of a slice.
+Direction = Slice.derive.dual                                  # Antivector-
+SpacetimeBivector = Bivector.derive.within(Algebra("t+x-y-z-"))  # Bivector+, the Lorentz sector
+ConnectionType = ALG.gatype((Bivector, Direction))             # Bivector+ <- Direction-
+CurvatureType = ALG.gatype((Bivector, Direction, Direction))   # Bivector+ <- (Direction-, Direction-)
+
+# The coordinate directions d_t, d_x, d_y, d_z, and the coordinate slices that read them,
+# `SLICES[mu] & DIRECTIONS[nu] = delta`: the slice of a coordinate is its basis vector raised with the metric.
+DIRECTIONS = stack([t.dual(), x.dual(), y.dual(), z.dual()])   # [4] Direction-
+SLICES = stack([t, -x, -y, -z])                                # [4] Slice+
+time = t.dual()                                                # [] Direction-, squares to +1
+# The conformal origin and the point at infinity as intrinsic points.
+ORIGIN = n_o.dual()                                            # [] Antivector-
+INFINITY = n_inf.dual()                                        # [] Antivector-
 
 
 def point(x4):
-    """A spacetime position / direction (4 coefficients t,x,y,z) as an extensor."""
-    return CTX.extensor(Spacetime, CTX.xp.asarray(x4))
+    """A spacetime event or direction from its coordinates (t, x, y, z) along the last axis."""
+    return (DIRECTIONS * CTX.xp.asarray(x4, dtype=np.float64)).sum(axis=-1)            # [...] Direction-
+
+
+def coordinates(direction) -> np.ndarray:
+    """The coordinates (t, x, y, z) of a direction, along a new last axis, each read by its slice."""
+    return (SLICES & direction[..., None]).kernel[..., 0]
+
+
+def components(map_) -> np.ndarray:
+    """A map of spacetime directions as an array, output first, then one axis per input over the coordinate
+    directions: coordinates for a direction-valued map, blade coefficients otherwise."""
+    arity = map_.gatype.arity
+    inputs = [DIRECTIONS.reshape(tuple(4 if k == j else 1 for k in range(arity))) for j in range(arity)]
+    value = map_(*inputs) if arity else map_
+    if value.gatype.subspaces[0] == Direction.subspaces[0] or value.gatype.subspaces[0] == ALG.subspace.antivector():
+        array = np.asarray(coordinates(value))
+    else:
+        array = np.asarray(value.kernel)
+    return np.moveaxis(array, -1, 0)
 
 
 def connection_from_columns(cols):
-    """Omega from its values on the coordinate vectors: cols (4, 15) blade coefficients -> Bivector <- Spacetime."""
-    return CTX.extensor(ConnectionType, CTX.xp.asarray(cols).T)
+    """Omega from its values on the coordinate directions: cols (4, 15) blade coefficients, Omega(d_mu) = cols[mu]."""
+    return (mv.bivector(CTX.xp.asarray(cols)) * (SLICES & Direction)).sum(axis=0)      # Bivector+ <- Direction-
 
 
 def connection_columns(Omega):
-    """(4, 15) blade coefficients of Omega(e_mu), mu = t,x,y,z."""
-    return Omega.kernel.T
+    """(4, 15) blade coefficients of Omega(d_mu), mu = t,x,y,z."""
+    return Omega(DIRECTIONS).kernel
 
 
 # ----- sector projectors (Bivector <- Bivector), built from the null basis -----

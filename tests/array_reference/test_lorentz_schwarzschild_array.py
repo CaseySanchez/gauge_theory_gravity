@@ -3,9 +3,9 @@ import numpy as np
 import jax.numpy as jnp
 import pytest
 
-import gtg_csta  # noqa: F401
-from gtg_csta import algebra as al
-from gtg_csta._array import cartan, fields as fl, gauge, curvature as cv, sta_embedding as se
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import algebra as al
+from gauge_theory_gravity._array import cartan, fields as fl, gauge, curvature as cv, sta_embedding as se
 
 X0 = jnp.array([0.3, 1.7, -0.9, 1.1])
 

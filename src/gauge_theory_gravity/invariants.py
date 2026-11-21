@@ -9,7 +9,6 @@ from .cartan import Coframe
 from .curvature import curvature
 from .fields import Field
 
-Spacetime = al.Spacetime
 
 
 def quadratic_invariant(coframe: Coframe, omega: Field) -> Field:
@@ -18,7 +17,7 @@ def quadratic_invariant(coframe: Coframe, omega: Field) -> Field:
     strength = curvature(omega)
 
     def invariant(x: Extensor) -> Extensor:
-        frame = coframe(x).inverse()
+        frame = cartan.frame_at(coframe, x)
         framed = strength(x)(frame, frame)                                             # Bivector <- (a, b)
         return (framed * ~framed).restrict[0].contract(1, 3).contract(1, 2)           # [] Scalar+
 
@@ -28,7 +27,7 @@ def quadratic_invariant(coframe: Coframe, omega: Field) -> Field:
 def weyl_squared(coframe: Coframe, x: Extensor) -> Extensor:
     """C^2 = Riem^2 - 2 Ric^2 + R^2/3, with Riem^2 = 2 I of the Lorentz connection."""
     lorentz = cartan.lorentz_connection(coframe)
-    frame = coframe(x).inverse()
+    frame = cartan.frame_at(coframe, x)
     riemann_squared = 2 * quadratic_invariant(coframe, lorentz)(x)                    # [] Scalar+
-    ricci = conformal.ricci_vector(curvature(lorentz)(x), frame).cast(Spacetime)(frame)    # Ric^b_a as an endomorphism
+    ricci = conformal.ricci_vector(curvature(lorentz)(x), frame)(frame)                   # Ric^b_a as an endomorphism
     return riemann_squared - 2 * ricci(ricci).trace() + ricci.trace() ** 2 / 3

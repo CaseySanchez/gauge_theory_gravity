@@ -1,7 +1,7 @@
 """Export spacetime slices to ParaView as VTKHDF ImageData, one file per time step plus a `.vtkhdf.series`.
 
-    PYTHONPATH=src python -m gtg_csta.export flyby --n 48 --frames 16 --out export/flyby
-    PYTHONPATH=src python -m gtg_csta.export growing_mass --n 48 --frames 16 --out export/growing_mass
+    PYTHONPATH=src python -m gauge_theory_gravity.export flyby --n 48 --frames 16 --out export/flyby
+    PYTHONPATH=src python -m gauge_theory_gravity.export growing_mass --n 48 --frames 16 --out export/growing_mass
 
 Open `export/flyby/flyby.vtkhdf.series` in ParaView (>= 5.12 reads `.vtkhdf` and `.series`); the time slider then
 steps through the slices.  Each step is the field content of the CSTA connection on the spatial grid at
@@ -59,7 +59,7 @@ def field_function(coframe: Coframe) -> Callable[[Extensor], dict[str, Extensor]
             "ricci_scalar": cf.ricci_scalar(coframe, x),
             "F_M": al.sector(curved, "M"), "F_P": al.sector(curved, "P"),
             "F_K": al.sector(curved, "K"), "F_D": al.sector(curved, "D"),
-            "coframe": coframe(x),
+            "shift": coframe(x)(al.time),
         }
 
     return fields
@@ -73,7 +73,7 @@ def readout(fields: dict[str, Extensor]) -> dict[str, np.ndarray]:
     for name in ("F_M", "F_P", "F_K", "F_D"):
         kernel = np.asarray(fields[name].kernel)
         out[name] = np.sqrt((kernel.reshape(len(kernel), -1) ** 2).sum(axis=1))
-    out["shift"] = np.asarray(fields["coframe"].kernel)[:, 1:, 0]
+    out["shift"] = al.coordinates(fields["shift"])[:, 1:]
     return out
 
 

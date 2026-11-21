@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-import gtg_csta  # noqa: F401
+import gauge_theory_gravity  # noqa: F401
 from adapters import array_connection
-from gtg_csta import algebra as al, fields as fl, versors as vs, gauge, covariant, curvature as cv
-from gtg_csta._array import curvature as acv
+from gauge_theory_gravity import algebra as al, fields as fl, versors as vs, gauge, covariant, curvature as cv
+from gauge_theory_gravity._array import curvature as acv
 
 X0 = al.point([0.1, -0.2, 0.3, 0.25])
 nz = lambda e: np.asarray(e.kernel)
@@ -108,8 +108,8 @@ def test_fd_convergence_order():
 def test_matches_array_reference_curvature(seed):
     omega = fl.random_connection_field(seed)
     F = cv.curvature(omega)(X0)
-    reference = acv.curvature(array_connection(omega))(X0.kernel)                     # [mu, nu, 15]
-    assert np.abs(np.moveaxis(nz(F), 0, -1) - np.asarray(reference)).max() < 1e-12
+    reference = acv.curvature(array_connection(omega))(al.coordinates(X0))            # [mu, nu, 15]
+    assert np.abs(np.moveaxis(al.components(F), 0, -1) - np.asarray(reference)).max() < 1e-12
 
 
 def test_sector_projectors_match_generator_coordinates():

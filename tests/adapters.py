@@ -1,5 +1,5 @@
-"""Adapters from extensor fields to the array reference implementation (`gtg_csta._array`)."""
-from gtg_csta import algebra as al
+"""Adapters from extensor fields to the array reference implementation (`gauge_theory_gravity._array`)."""
+from gauge_theory_gravity import algebra as al
 
 
 def array_connection(omega):
@@ -12,5 +12,5 @@ def array_connection(omega):
 def array_path(path):
     """An extensor path (scalar parameter -> position) as an array path s -> x4."""
     def points(s):
-        return path(al.mv.scalar(s.reshape(1))).kernel
+        return al.coordinates(path(al.mv.scalar(s.reshape(1))))
     return points

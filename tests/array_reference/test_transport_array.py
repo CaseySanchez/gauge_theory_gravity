@@ -3,8 +3,8 @@ import numpy as np
 import jax.numpy as jnp
 import pytest
 
-import gtg_csta  # noqa: F401
-from gtg_csta._array import fields as fl, gauge, curvature as cv, transport as tp, versors as vs
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity._array import fields as fl, gauge, curvature as cv, transport as tp, versors as vs
 
 X0 = jnp.array([0.1, -0.2, 0.3, 0.25])
 

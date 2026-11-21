@@ -3,11 +3,11 @@ import numpy as np
 import jax.numpy as jnp
 import pytest
 
-import gtg_csta  # noqa: F401
-from gtg_csta import algebra as al
-from gtg_csta._array import fields as fl
-from gtg_csta._array import versors as vs
-from gtg_csta._array import gauge, covariant, curvature as cv
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import algebra as al
+from gauge_theory_gravity._array import fields as fl
+from gauge_theory_gravity._array import versors as vs
+from gauge_theory_gravity._array import gauge, covariant, curvature as cv
 
 X0 = jnp.array([0.1, -0.2, 0.3, 0.25])
 

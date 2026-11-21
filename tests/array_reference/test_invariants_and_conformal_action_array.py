@@ -3,9 +3,9 @@ import numpy as np
 import jax.numpy as jnp
 import pytest
 
-import gtg_csta  # noqa: F401
-from gtg_csta import algebra as al
-from gtg_csta._array import cartan, conformal as cf, invariants as iv, fields as fl
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import algebra as al
+from gauge_theory_gravity._array import cartan, conformal as cf, invariants as iv, fields as fl
 
 CASES = {
     "schw": (cartan.painleve_gullstrand(1.0), jnp.array([.3, 1.7, -.9, 1.1])),

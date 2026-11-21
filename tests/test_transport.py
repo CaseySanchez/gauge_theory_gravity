@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-import gtg_csta  # noqa: F401
+import gauge_theory_gravity  # noqa: F401
 from adapters import array_connection, array_path
-from gtg_csta import algebra as al, fields as fl, gauge, curvature as cv, transport as tp, versors as vs
-from gtg_csta._array import transport as atp
+from gauge_theory_gravity import algebra as al, fields as fl, gauge, curvature as cv, transport as tp, versors as vs
+from gauge_theory_gravity._array import transport as atp
 
 X0 = al.point([0.1, -0.2, 0.3, 0.25])
 nz = lambda e: np.asarray(e.kernel)
@@ -60,7 +60,7 @@ def test_holonomy_is_exp_minus_half_curvature(plane):
     """T_loop = exp(-1/2 eps^2 F(e_mu, e_nu)) + O(eps^3) (orientation: +mu, +nu, -mu, -nu)."""
     mu, nu = plane
     Om = fl.random_connection_field(7, 0.4)
-    F = cv.curvature(Om)(X0)(al.SPACETIME[mu], al.SPACETIME[nu])
+    F = cv.curvature(Om)(X0)(al.DIRECTIONS[mu], al.DIRECTIONS[nu])
     errors = {}
     for size in (0.08, 0.04):
         T = tp.holonomy_loop(Om, X0, mu, nu, size, 30, "magnus4")

@@ -10,14 +10,14 @@ from .fields import Field, derivative_of, permute_inputs
 
 def curvature(omega: Field, method: str = "jax", step: float = 1e-4) -> Field:
     """F(a,b) = a.grad Omega(b) - b.grad Omega(a) + 1/2 [Omega(a), Omega(b)]   (constant coordinate vectors a, b,
-    so the -Omega([a,b]) term drops; [X,Y] = XY - YX).  A map Bivector <- (Spacetime, Spacetime).
+    so the -Omega([a,b]) term drops; [X,Y] = XY - YX).  A map Bivector <- (Direction, Direction).
 
     `d = derivative(Omega)` has the inputs (b, step a) = a.grad Omega(b); swapping them gives the other term, and
     numga's `commutator` is (XY - YX)/2, exactly the 1/2 [Omega(a), Omega(b)] of the spec."""
     gradient = derivative_of(method, step)(omega)
 
     def curved(x: Extensor) -> Extensor:
-        connection = omega(x)                                                            # Bivector <- Spacetime
+        connection = omega(x)                                                            # Bivector <- Direction
         d = gradient(x)                                                                  # Bivector <- (b, a)
         return permute_inputs(d, (1, 0)) - d + connection.commutator(connection)         # Bivector <- (a, b)
 
@@ -26,7 +26,7 @@ def curvature(omega: Field, method: str = "jax", step: float = 1e-4) -> Field:
 
 def commutator_of_derivatives(omega: Field, spinor: Field, method: str = "jax", step: float = 1e-4) -> Field:
     """[D_a, D_b] Psi from the covariant derivative itself (second derivatives of Psi cancel): a map
-    Even <- (Spacetime a, Spacetime b)."""
+    Even <- (Direction a, Direction b)."""
     covariant = covariant_derivative(omega, spinor, method, step)
     gradient = derivative_of(method, step)(covariant)
 
@@ -41,7 +41,7 @@ def commutator_of_derivatives(omega: Field, spinor: Field, method: str = "jax", 
 
 def bianchi_residual(omega: Field, method: str = "jax", step: float = 1e-4) -> Field:
     """The cyclic sum over (l,a,b) of D_l F(a,b) = d_l F(a,b) + 1/2 [Omega(l), F(a,b)]; it must vanish.
-    A map Bivector <- (Spacetime, Spacetime, Spacetime)."""
+    A map Bivector <- (Direction, Direction, Direction)."""
     gradient = derivative_of(method, step)(curvature(omega, method, step))
     strength = curvature(omega, method, step)
 

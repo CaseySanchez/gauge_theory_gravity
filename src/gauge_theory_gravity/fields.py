@@ -1,7 +1,7 @@
 """Fields as extensors.
 
-A field is a function of a spacetime position `x`, an extensor of type `Spacetime`, and returns an extensor:
-  * connection  Omega(x): Bivector <- Spacetime       (the value `Omega(a)` on a direction a is a bivector)
+A field is a function of a spacetime event `x`, an intrinsic antivector of type `Direction`, and returns an extensor:
+  * connection  Omega(x): Bivector <- Direction       (the value `Omega(a)` on a direction a is a bivector)
   * versor      V(x):     Even, a Spin(2,4) element
   * spinor      Psi(x):   Even
 Its derivative is an extensor too: `derivative(f)(x)` has the output of f and one more input, the step
@@ -21,14 +21,14 @@ from numga.gatype import GAType
 
 from . import algebra as al
 
-Spacetime = al.Spacetime
+Direction = al.Direction
 Field = Callable[[Extensor], Extensor]
-# The step direction of a derivative: one more input, in the spacetime directions.
-STEP = (Spacetime.subspaces[0], Spacetime.orientations[0])
+# The step of a derivative: one more input, a spacetime direction (intrinsic, like the event it steps from).
+STEP = (Direction.subspaces[0], Direction.orientations[0])
 
 
 def position(x4) -> Extensor:
-    """A spacetime position (t, x, y, z) as an extensor."""
+    """A spacetime event from its coordinates (t, x, y, z): an intrinsic antivector."""
     return al.point(x4)
 
 
@@ -62,14 +62,15 @@ def permute_inputs(map_: Extensor, order: tuple[int, ...]) -> Extensor:
 def finite_difference(field: Field, step: float = 1e-4) -> Field:
     """Central-difference counterpart of `derivative` (4th order): the same result type, f's output with one more
     input, the step direction. It is for testing the exact derivative, and for fields available only as samples.
-    The partial derivative along a basis vector `e` is a map; it is paired with the coordinate form of the step,
-    `eta_ee (e | step)`, and the four are summed."""
+    The partial derivative along a coordinate direction is paired with the slice that reads that coordinate of the
+    step, `slice & step`, and the four are summed."""
     def difference(x: Extensor) -> Extensor:
         pieces = []
-        for axis, basis in enumerate(al.SPACETIME):
+        for axis in range(4):
+            basis, reading = al.DIRECTIONS[axis], al.SLICES[axis]
             around = [field(x + (k * step) * basis) for k in (2, 1, -1, -2)]
             partial = (8 * (around[1] - around[2]) - (around[0] - around[3])) / (12 * step)
-            pieces.append(partial * (al.ETA4[axis, axis] * (basis | Spacetime)))
+            pieces.append(partial * (reading & Direction))
         return reduce(add, pieces)
     return difference
 
@@ -96,7 +97,7 @@ def polynomial(output: GAType, seed: int = 0, scale: float = 0.3, degree: int = 
     def evaluate(x: Extensor) -> Extensor:
         total = terms[0]
         for power, term in enumerate(terms[1:], start=1):
-            total = total + term(*[al.ALG.gatype(Spacetime)] * n_free, *[x] * power)
+            total = total + term(*[al.ALG.gatype(Direction)] * n_free, *[x] * power)
         return total
 
     return evaluate
@@ -113,7 +114,7 @@ def random_versor_field(seed: int = 0, scale: float = 0.3) -> Field:
 
 
 def random_connection_field(seed: int = 0, scale: float = 0.3, degree: int = 2) -> Field:
-    """A generic (non-flat) smooth connection Omega(x): Bivector <- Spacetime."""
+    """A generic (non-flat) smooth connection Omega(x): Bivector <- Direction."""
     return polynomial(al.ConnectionType, seed, scale, degree)
 
 

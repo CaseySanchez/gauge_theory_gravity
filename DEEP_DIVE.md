@@ -1,7 +1,7 @@
 # Deep dive: the design, and the mathematics it implements
 
-This document explains how the code in `src/gtg_csta/` realises the conformal gauge connection of
-`gauge_theory_gravity_conformal_spacetime_algebra.md` (the "spec") on `numga` extensors. Each section gives
+This document explains how the code in `src/gauge_theory_gravity/` realises the conformal gauge connection of
+the proposal in [README.md](README.md) (the "spec") on `numga` extensors. Each section gives
 the mathematics, then the code that expresses it, then how it is checked. Results and caveats are in
 `RESULTS.md`; the original plan is `PLAN.md`.
 
@@ -77,12 +77,18 @@ The key design decision: the gauge connection is not a table of components but a
 $\Omega(a,x)$ is bivector-valued and linear in the direction $a$. In numga that is the type
 
 $$
-\Omega(x):\ \texttt{Bivector}\leftarrow\texttt{Spacetime},
+\Omega(x):\ \texttt{Bivector}\leftarrow\texttt{Direction},
 $$
 
-where `Spacetime` is the 4-dimensional subspace $\{t,x,y,z\}$ of the 6 vectors. Binding a direction gives a
-bivector: `Omega(a)`. A versor field is an `Even` extensor, a spinor likewise. A *field* is a callable on a
-position, itself an extensor of type `Spacetime`.
+where `Direction` is the type of spacetime events and directions. Following numga's conformal idiom (points are
+intrinsic antivectors, spheres and planes extrinsic vectors), a direction is an *intrinsic antivector*: the dual of
+one of $t,x,y,z$, a grade-5 blade in this 6D algebra. It is read by an *extrinsic* `Slice`, a vector in
+$\{t,x,y,z\}$, through the regressive product, `slice & direction`; the coordinate slices `SLICES = [t, -x, -y, -z]`
+read the coordinate directions `DIRECTIONS = [t*, x*, y*, z*]` as $\delta^\mu_\nu$. The metric on directions is still
+`|` ($d_\mu|d_\nu=\eta_{\mu\nu}$). numga checks orientations statically, so adding a slice to a direction, or feeding a
+slice to $\Omega$, is a type error before any arithmetic. Binding a direction gives a bivector: `Omega(a)`. A versor
+field is an `Even` extensor, a spinor likewise; both are extrinsic, as generators and motions are. A *field* is a
+callable on an event, itself an extensor of type `Direction`.
 
 The directional derivative $a\cdot\nabla$ is numga's `derivative`: for $f(x)$ of type $S\leftarrow(I\dots)$ it
 produces $S\leftarrow(I\dots,\ \text{step})$, so for the connection
@@ -107,7 +113,7 @@ $$
 
 In code: `V >> Omega` is the sandwich $V\Omega\tilde V$ of the map's *output* (the input $a$ is a position-space
 direction and is not transformed), and the inhomogeneous term is `-2 * (dV(x) * ~V(x))`, with `dV = derivative(V)`
-of type `Even <- Spacetime`. It is grade-projected with `.restrict[2]`.
+of type `Even <- Direction`. It is grade-projected with `.restrict[2]`.
 
 That the result is a pure bivector is a claim of the spec; it holds because
 $(\partial V)\tilde V$ is a bivector for $V\tilde V=1$ (differentiate: $(\partial V)\tilde V+V\,\partial\tilde V=0$,
@@ -179,7 +185,7 @@ $$
 
 - midpoint ($O(h^2)$): one exponential per step;
 - Magnus-4 ($O(h^4)$), with $A_i=-\tfrac12\Omega(\gamma'(s+c_i h))$, $c_{1,2}=\tfrac12\mp\tfrac{\sqrt3}{6}$:
-  $$\Theta=\tfrac h2(A_1+A_2)-\tfrac{\sqrt3}{12}h^2[A_1,A_2],$$ code uses numga's half-commutator, hence $\tfrac{\sqrt3}{6}h^2\,A_1.\mathrm{commutator}(A_2)$.
+  $\Theta=\tfrac h2(A_1+A_2)-\tfrac{\sqrt3}{12}h^2[A_1,A_2]$, code uses numga's half-commutator, hence $\tfrac{\sqrt3}{6}h^2\,A_1.\mathrm{commutator}(A_2)$.
 
 A versor stays a versor under this scheme because each factor is the exponential of a bivector
 ($T\tilde T=1$ to 1e-10). Orders of convergence are tested ($\approx4\times$ and $\approx16\times$ error drop
@@ -200,12 +206,18 @@ generic $\Omega$ does not: a global versor field cannot reproduce a general conn
 
 ## 6. Geometry from a tetrad (`cartan.py`)
 
-Spacetime geometry enters through a coframe $e^a{}_\nu$, an extensor $\texttt{Spacetime}_{\text{frame}}\leftarrow\texttt{Spacetime}_{\text{coord}}$,
+Spacetime geometry enters through a coframe $e^a{}_\nu$, an extensor $\texttt{Direction}_{\text{frame}}\leftarrow\texttt{Direction}_{\text{coord}}$,
 $e(\partial_\nu)=e^a{}_\nu e_a$. The algebra's own metric supplies the rest:
 
 $$
-g=e\,|\,e\quad(\text{a form},\ g_{\mu\nu}=\eta_{ab}e^a{}_\mu e^b{}_\nu),\qquad E=e^{-1}\quad(\texttt{e.inverse()}).
+g=e\,|\,e\quad(\text{a form},\ g_{\mu\nu}=\eta_{ab}e^a{}_\mu e^b{}_\nu),\qquad E=e^{-1}.
 $$
+
+Each geometry is a `Geometry(coframe, frame)` and carries $E$ in closed form. Where the coframe is the identity plus a
+*null dyad*, $e=\mathrm{Id}+N$ with $N^2=0$, the frame is $E=\mathrm{Id}-N$: for Painlevé–Gullstrand
+$N=\beta\,(t\,\&\,\cdot)$ and the time slice does not read the spatial shift, so $t\cdot\beta=0$ and $N^2=0$; for
+Kerr–Schild $N=-f\,l\,(l\cdot)$ with $l$ flat-null. FRW, the lapse metric and the boost have their own closed forms.
+A bare coframe field falls back to `e.inverse()`.
 
 ### 6.1 Christoffel symbols
 
@@ -255,6 +267,7 @@ index implementation that builds $R^a{}_{b\mu\nu}$ from Christoffel symbols dire
 | static lapse | $e^0=N(\mathbf x)dt,\ e^i=dx^i$ | generic: Weyl, Ricci and Cotton all non-zero |
 | boosted PG | $e'^a{}_\nu(x)=e^a{}_\mu(Lx)L^\mu{}_\nu$ | vacuum, moving hole |
 | PG with $M(t)$ | as PG, $M\to M(t)$ | toy with matter |
+| Kerr, Cartesian Kerr–Schild | $e=\mathrm{Id}-f\,l\,(l\cdot)$, $f=Mr^3/(r^4+a^2z^2)$, $l=\partial_t-n$ ingoing null | vacuum, rotating; GTG's position gauge field |
 
 Painlevé–Gullstrand coordinates are used because the spatial slices are flat Euclidean, the tetrad is simple, and
 nothing blows up at the horizon, which makes the interior grids and ray tracing well defined down to $r\to0$.
@@ -269,8 +282,10 @@ $$
 \boxed{\ \Omega=\Omega_{\text{Lorentz}}+e\wedge n_\infty+f\wedge n_o+b\,(n_o\wedge n_\infty)\ }
 $$
 
-where $e$ is the coframe, $f:\texttt{Spacetime}\leftarrow\texttt{Spacetime}$ the special-conformal part and $b$ a form
-(dilation). Each term is one wedge product of an extensor with a null vector.
+where $e$ is the coframe, $f:\texttt{Direction}\leftarrow\texttt{Direction}$ the special-conformal part and $b$ a form
+(dilation). With directions intrinsic, the wedges are written as joins with the conformal origin and infinity, both
+intrinsic points: the translation generator along $d$ is $(d\,\&\,\infty^*)^* = e_d\wedge n_\infty$ and the
+special-conformal one $(d\,\&\,o^*)^* = e_d\wedge n_o$, the construction numga's conformal examples use.
 
 ### 7.1 Sectors of the curvature
 
@@ -290,12 +305,12 @@ $\Pi_MF$ trace-free:
 
 $$
 \mathrm{Ric}(\nu)=\sum_a e^a\lrcorner\,\Pi_MF(E_a,\nu)=0
-\qquad\bigl(\texttt{(S | FM(E, S)).contract(1, 2)}\bigr).
+\qquad\bigl(\texttt{(-FM(E, D).commutator(D)).contract(1, 3)}\bigr).
 $$
 
 The conditions are affine in the 16 unknowns $f^a{}_\mu$ and involve no derivatives of $f$ (so they are pointwise).
-The code builds the residual as an extensor expression, differentiates it by `jacfwd` and solves the 16-unknown
-least squares. Result, in every test spacetime and to 1e-16:
+The code builds the residual as an extensor expression, assembles its 16 columns from unit perturbations of $f$
+(exact, since the residual is affine in $f$) and solves the 16-unknown least squares. Result, in every test spacetime and to 1e-16:
 
 $$
 \boxed{\ f^a{}_\mu=P^a{}_\mu=\tfrac12\Bigl(\mathrm{Ric}^a{}_\mu-\tfrac R6\,e^a{}_\mu\Bigr)\ }
@@ -334,14 +349,15 @@ compensator, no symmetry breaking. Einstein recovery (spec §11.4) remains open.
 
 ## 8. Generator roles through the conformal action of versors (tests)
 
-Points embed as the null vector $X=n_o+x-\tfrac12x^2\,n_\infty$ (null because $n_o\!\cdot n_\infty=+1$). A versor acts by
-$X\mapsto VX\tilde V$. Measured, with $V=\exp(cG)$:
+Points embed as the null intrinsic point $X=o+x-\tfrac12x^2\,\infty$, with $o=n_o^*$, $\infty=n_\infty^*$ and $x$ the
+event's direction (null because $n_o\!\cdot n_\infty=+1$); its coordinates are read by the slices, its weight by the
+sphere at infinity, `n_inf & X`. A versor acts by `V >> X`. Measured, with $V=\exp(cG)$:
 
 | Generator | Effect on $x$ | Why |
 |---|---|---|
-| $P_a$ | $x\to x+2c\,e_a$, $n_\infty$ fixed | translation; the sandwich doubles the parameter |
+| $P_a$ | $x\to x+2c\,e_a$, $\infty$ fixed | translation; the sandwich doubles the parameter |
 | $D$ | $x\to e^{-2\lambda}x$ | dilation, same factor of two |
-| $K_a$ | fixes $n_o$; preserves the null cone | special conformal |
+| $K_a$ | fixes $o$; preserves the null cone | special conformal |
 | $M_{ab}$ | $x^2$ preserved, no rescaling | Lorentz |
 
 This confirms the spec's labelling: $P_a=e_a\wedge n_\infty$ really generates translations (it fixes the point at
@@ -377,14 +393,15 @@ checked by reading with VTK's own reader.
 ## 10. Why this architecture
 
 **Extensors for the CSTA objects.** The spec's objects are linear maps with a typed output and typed input:
-$\Omega:\texttt{Spacetime}\to\texttt{Bivector}$, $F:(\texttt{Spacetime},\texttt{Spacetime})\to\texttt{Bivector}$,
-$e:\texttt{Spacetime}\to\texttt{Spacetime}$, the sector projectors $\texttt{Bivector}\to\texttt{Bivector}$. Binding is
+$\Omega:\texttt{Direction}\to\texttt{Bivector}$, $F:(\texttt{Direction},\texttt{Direction})\to\texttt{Bivector}$,
+$e:\texttt{Direction}\to\texttt{Direction}$, the sector projectors $\texttt{Bivector}\to\texttt{Bivector}$. Binding is
 $\Omega(a)$; composition is a function call; the adjoint action is `>>`; contractions are `.contract`.
 This removed index bookkeeping from the curvature, Bianchi, spin connection, Ricci, Schouten and the invariants.
 
 **Idiom.** Following `numga/examples`: module-level named types, small named functions, no `lambda` and no
 `jax.numpy` in the package. Geometries are *identity plus dyads*, as in gauge theory gravity:
-$e_{PG}=\mathrm{Id}+\beta\,(t\,|\,\cdot)$ is `Spacetime + shift * (time | Spacetime)`, FRW and the lapse metric are
+$e_{PG}=\mathrm{Id}+\beta\,(t\,\&\,\cdot)$ is `Direction + shift * (t & Direction)`, Kerr is
+`Direction - profile * null * (null.dual_inverse() & Direction)`, FRW and the lapse metric are
 `TimePart + a * SpacePart` and `N * TimePart + SpacePart`, and a boost is a rotor sandwich,
 $e'(x)=e(R\rhd x)\circ(R\rhd\cdot)$ with $R=\exp(\tfrac12\,\mathrm{artanh}(v)\,t\wedge x)$. Test fields are random
 polynomials $c_0+c_1(x)+c_2(x,x)$ of multilinear maps. Positions, steps and loops are batch axes of extensors, and the ordered
@@ -397,9 +414,10 @@ product of step versors is `cumprod` (numga multiplies later elements on the lef
 - the carry flags of the ray tracer's `lax.scan`;
 - `permute_inputs`, a small helper for the missing axis permutation of multilinear maps.
 
-**The ray tracer is the connection.** A ray's momentum is a frame vector $k$ and its position an event $x$:
+**The ray tracer is the connection.** A ray's momentum is a frame direction $k$ and its position an event $x$:
 $$\dot x=E(k),\qquad \dot k=-\tfrac12[\Omega(\dot x),k]\quad(\texttt{-Omega(xdot).commutator(k)}),$$
-the geodesic equation as parallel transport of $k$ by the Lorentz connection of §6.2 along its own path.
+the geodesic equation as parallel transport of $k$ by the Lorentz connection of §6.2 along its own path. The camera
+screen, a map `Direction <- Screen`, is carried by the same commutator, which is what the polarization render reads.
 
 **Two independent implementations.** The first version was written with raw `einsum` and is retained in
 `_array/`. It is an oracle: curvature, transport, spin connection, Christoffel symbols, Schouten and Weyl² of
@@ -427,6 +445,9 @@ pointwise; this avoids discretisation error in every identity test. Grids appear
 | torsion $=0$; normal $f=$ Schouten; Cotton sector; $I=\tfrac12C^2$ | `test_conformal_cartan.py`, `test_invariants_and_conformal_action.py` | 1e-8 … 1e-16 |
 | generator roles ($2c$ translation, $e^{-2\lambda}$ dilation) | same | 1e-12 |
 | VTKHDF layout; fields of a small flyby grid (vacuum identities) | `test_export.py` (`-m slow`) | read back by `vtkHDFReader` |
+| orientation typing enforced; closed-form frames invert the coframes (six geometries) | `test_types_and_frames.py` | 1e-13 |
+| Kerr: Kerr–Schild form; torsion $=0$, Ricci $=0$, normal $f=0$, $2I=$ Kretschmann; equals numga's Kerr gauge field and rotation gauge field | `test_kerr.py` | 1e-12 … 1e-14 |
+| ray tracer: $k\cdot\partial_t$, $k\cdot\partial_\phi$ conserved; screen orthonormal; redshift vs conserved quantities; unit-intensity coherency | `test_render.py` | 5e-3 (integrator) / 1e-12 |
 
 ---
 
@@ -446,5 +467,6 @@ pointwise; this avoids discretisation error in every identity test. Grids appear
   `jit(vmap)` of the holonomy loop gave wrong values on CPU for batches above about 16 (cause not identified; loops are now one
   extensor batch). Backward ray tracing in the PG chart must stop at $r\lesssim2.2M$, because a backward ray hugging the
   horizon continues onto an unphysical branch.
-- **Rendering** (lensed image, GIF) is Schwarzschild only, with no redshift or beaming; the camera shadow radius agrees
-  with the analytic value to 0.65%.
+- **Rendering** covers Schwarzschild and Kerr (a = 0.9) with redshift, Doppler beaming, Page–Thorne colour and
+  polarization; the Schwarzschild shadow radius agrees with the analytic value to 0.2%. Not modelled: light-travel delay,
+  multiple disk crossings, gas aberration of the polarization.

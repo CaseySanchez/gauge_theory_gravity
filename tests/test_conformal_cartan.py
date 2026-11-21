@@ -2,9 +2,9 @@
 import numpy as np
 import pytest
 
-import gtg_csta  # noqa: F401
-from gtg_csta import algebra as al, cartan, conformal as cf, curvature as cv
-from gtg_csta._array import conformal as acf, cartan as ac
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import algebra as al, cartan, conformal as cf, curvature as cv
+from gauge_theory_gravity._array import conformal as acf, cartan as ac
 
 X = al.point([1.3, 0.4, -0.7, 0.9])
 SPACETIMES = {
@@ -18,7 +18,7 @@ nz = lambda e: np.asarray(e.kernel)
 @pytest.mark.parametrize("name", SPACETIMES)
 def test_coframe_as_identity_plus_dyad_matches_index_implementation(name):
     coframe, x, reference = SPACETIMES[name]
-    assert np.abs(nz(coframe(x)) - np.asarray(reference(x.kernel))).max() < 1e-12
+    assert np.abs(al.components(coframe(x)) - np.asarray(reference(al.coordinates(x)))).max() < 1e-12
 
 
 @pytest.mark.parametrize("name", SPACETIMES)
@@ -38,8 +38,8 @@ def test_normal_conditions_solvable_and_f_is_the_schouten_tensor(name):
 @pytest.mark.parametrize("name", SPACETIMES)
 def test_schouten_matches_index_implementation(name):
     coframe, x, reference = SPACETIMES[name]
-    schouten, scalar = acf.schouten_frame(reference, x.kernel)
-    assert np.abs(nz(cf.schouten(coframe)(x)) - np.asarray(schouten)).max() < 1e-10
+    schouten, scalar = acf.schouten_frame(reference, al.coordinates(x))
+    assert np.abs(al.components(cf.schouten(coframe)(x)) - np.asarray(schouten)).max() < 1e-10
     assert abs(al.scalar(cf.ricci_scalar(coframe, x)) - float(scalar)) < 1e-10
 
 
@@ -58,7 +58,7 @@ def test_special_conformal_curvature_is_cotton_and_vanishes_for_conformally_flat
 def test_lorentz_curvature_becomes_weyl_tracefree_part():
     coframe, x, _ = SPACETIMES["lapse"]
     strength = cv.curvature(cf.connection(coframe, cf.schouten(coframe)))(x)
-    assert np.abs(nz(cf.ricci_vector(strength, coframe(x).inverse()))).max() < 1e-9       # trace-free
+    assert np.abs(nz(cf.ricci_vector(strength, cartan.frame_at(coframe, x)))).max() < 1e-9       # trace-free
     plain = cv.curvature(cf.connection(coframe))(x)
     assert np.abs(nz(al.sector(strength, "M") - al.sector(plain, "M"))).max() > 1e-3     # differs from plain Riemann
 

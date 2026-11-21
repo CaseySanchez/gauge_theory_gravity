@@ -1,7 +1,7 @@
 """Phase 1: spec sections 2-4."""
 import numpy as np
-import gtg_csta  # noqa: F401
-from gtg_csta import algebra as al
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import algebra as al
 
 
 def sc(a):

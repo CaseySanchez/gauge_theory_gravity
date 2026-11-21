@@ -1,4 +1,4 @@
-"""Runnable demonstrations.  From the repo root:  PYTHONPATH=src python -m gtg_csta.examples.scenarios [name ...]
+"""Runnable demonstrations.  From the repo root:  PYTHONPATH=src python -m gauge_theory_gravity.examples.scenarios [name ...]
 Names: gauge_orbits holonomy sectors schwarzschild.  Figures go to ./output/."""
 from __future__ import annotations
 

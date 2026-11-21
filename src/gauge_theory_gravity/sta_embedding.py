@@ -9,11 +9,11 @@ from numga.extensor import Extensor
 from . import algebra as al
 
 # The spacetime bivectors, the Lorentz sector: a connection with only these is `e = f = b = 0`.
-LorentzConnection = al.ALG.gatype((al.SpacetimeBivector, al.Spacetime))          # SpacetimeBivector <- Spacetime
+LorentzConnection = al.ALG.gatype((al.SpacetimeBivector, al.Direction))          # SpacetimeBivector+ <- Direction-
 
 
 def lorentz_embedding(omega: Extensor) -> Extensor:
-    """A map into the spacetime bivectors as a connection of the full algebra: Bivector <- Spacetime."""
+    """A map into the spacetime bivectors as a connection of the full algebra: Bivector <- Direction."""
     return omega.cast(al.Bivector)
 
 

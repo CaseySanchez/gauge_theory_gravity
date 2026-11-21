@@ -18,7 +18,7 @@ from numga.extensor import Extensor
 from . import algebra as al
 from .fields import Field
 
-Path = Callable[[Extensor], Extensor]               # Scalar parameter -> Spacetime position
+Path = Callable[[Extensor], Extensor]               # Scalar parameter -> event (Direction)
 UNIT = al.mv.scalar([1.0])                          # [] Scalar+
 GAUSS = np.sqrt(3.0) / 6.0
 
@@ -31,10 +31,10 @@ class Line:
     end: Extensor
 
     def __call__(self, parameter: Extensor) -> Extensor:
-        return self.start + parameter * (self.end - self.start)                         # Spacetime
+        return self.start + parameter * (self.end - self.start)                         # Direction-
 
     def velocity(self, parameter: Extensor) -> Extensor:
-        return self.end - self.start                                                     # Spacetime, constant along the line
+        return self.end - self.start                                                     # Direction-, constant along the line
 
 
 def straight_line(start: Extensor, end: Extensor) -> Line:
@@ -45,7 +45,7 @@ def velocity_along(path: Path, parameters: Extensor) -> Extensor:
     """The path's velocity at a batch of parameters: exact for a `Line`, else the derivative of the path."""
     if isinstance(path, Line):
         return path.velocity(parameters)
-    return derivative(path)(parameters)(UNIT)                                           # [steps] Spacetime
+    return derivative(path)(parameters)(UNIT)                                           # [steps] Direction-
 
 
 def connection_along(omega: Field, path: Path, parameters: Extensor) -> Extensor:
@@ -80,7 +80,7 @@ def holonomy_loop(omega: Field, start: Extensor, mu: int, nu: int, size: float,
                   steps_per_side: int = 40, scheme: str = "midpoint") -> Extensor:
     """Transport around the rectangle start -> +mu -> +nu -> -mu -> -nu by composing its four legs.
     Verified: T = exp(-1/2 size^2 F(e_mu, e_nu)) + O(size^3)."""
-    along, across = size * al.SPACETIME[mu], size * al.SPACETIME[nu]
+    along, across = size * al.DIRECTIONS[mu], size * al.DIRECTIONS[nu]
     corners = [start, start + along, start + along + across, start + across, start]
     holonomy = None
     for corner, following in zip(corners[:-1], corners[1:]):

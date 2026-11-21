@@ -4,9 +4,9 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import gtg_csta  # noqa: F401
-from gtg_csta import algebra as al
-from gtg_csta._array import cartan, conformal as cf, curvature as cv
+import gauge_theory_gravity  # noqa: F401
+from gauge_theory_gravity import algebra as al
+from gauge_theory_gravity._array import cartan, conformal as cf, curvature as cv
 
 X = jnp.array([1.3, 0.4, -0.7, 0.9])
 SPACETIMES = {
