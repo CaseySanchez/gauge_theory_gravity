@@ -1,6 +1,7 @@
 """Export spacetime slices to ParaView as VTKHDF ImageData, one file per time step plus a `.vtkhdf.series`.
 
     PYTHONPATH=src python -m gauge_theory_gravity.export flyby --n 48 --frames 16 --out export/flyby
+    PYTHONPATH=src python -m gauge_theory_gravity.export kerr_flyby --n 48 --frames 16 --out export/kerr_flyby
     PYTHONPATH=src python -m gauge_theory_gravity.export growing_mass --n 48 --frames 16 --out export/growing_mass
 
 Open `export/flyby/flyby.vtkhdf.series` in ParaView (>= 5.12 reads `.vtkhdf` and `.series`); the time slider then
@@ -12,6 +13,9 @@ Fields are chunked and evaluated with `jit(vmap(...))`; the chunk size bounds me
 
 Fields (point data; magnitudes are L2 norms of the blade coefficients, so they depend on the frame):
   weyl2_half      <F F~> of the normal conformal connection (f = Schouten) = C^2 / 2   (gauge invariant)
+  weyl2_dual_half C.*C / 2, the imaginary part of the twistor trace of the curvature squared over the omega
+                  half (`twistor.weyl_invariant`), whose real part is weyl2_half; zero for static spherical holes,
+                  Im 24 M^2 / (r - i a cos theta)^6 for Kerr                             (gauge invariant)
   riem2_half      <F F~> of the Lorentz-only connection = Riemann^2 / 2                 (gauge invariant)
   ricci_scalar    R                                                                      (gauge invariant)
   F_M F_P F_K F_D |sector| of the normal connection's curvature: Lorentz (Weyl), translation (torsion = 0),
@@ -32,11 +36,11 @@ import numpy as np
 from numga.extensor import Extensor
 
 from . import algebra as al
-from . import cartan, conformal as cf, invariants as iv
+from . import cartan, conformal as cf, invariants as iv, twistor as tw
 from .cartan import Coframe
 from .curvature import curvature
 
-INVARIANTS = ("weyl2_half", "riem2_half", "ricci_scalar")
+INVARIANTS = ("weyl2_half", "weyl2_dual_half", "riem2_half", "ricci_scalar")
 
 
 # ------------------------------------------------------------------------------------------
@@ -50,11 +54,13 @@ def field_function(coframe: Coframe) -> Callable[[Extensor], dict[str, Extensor]
     strength = curvature(normal)
     normal_density = iv.quadratic_invariant(coframe, normal)
     lorentz_density = iv.quadratic_invariant(coframe, lorentz)
+    twistor_density = tw.weyl_invariant(coframe, normal)
 
     def fields(x: Extensor) -> dict[str, Extensor]:
         curved = strength(x)
         return {
             "weyl2_half": normal_density(x),
+            "weyl2_dual_half": tw.imaginary_part(twistor_density(x)),
             "riem2_half": lorentz_density(x),
             "ricci_scalar": cf.ricci_scalar(coframe, x),
             "F_M": al.sector(curved, "M"), "F_P": al.sector(curved, "P"),
@@ -172,6 +178,11 @@ def export_sequence(coframe, times, out, stem, n=48, half=10.0, center=(0.0, 0.0
 # the two spacetimes
 # ------------------------------------------------------------------------------------------
 
+def spinning_flyby(speed: float = 0.6, mass: float = 1.0, spin: float = 0.9) -> Coframe:
+    """A Kerr hole (spin along +z) moving along +x at the given speed: vacuum, with a nonzero C.*C."""
+    return cartan.boosted(cartan.kerr(mass, spin), speed)
+
+
 def flyby(speed: float = 0.6, mass: float = 1.0) -> Coframe:
     """Schwarzschild (mass M) moving along +x at the given speed, passing the origin at t = 0 (a boosted PG tetrad).
     Vacuum: Weyl^2 is the boosted r^-6 profile, Ricci = 0, Cotton = 0."""
@@ -181,17 +192,19 @@ def flyby(speed: float = 0.6, mass: float = 1.0) -> Coframe:
 def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("case", choices=["flyby", "growing_mass"])
+    ap.add_argument("case", choices=["flyby", "kerr_flyby", "growing_mass"])
     ap.add_argument("--n", type=int, default=48, help="grid points per axis")
     ap.add_argument("--frames", type=int, default=16)
     ap.add_argument("--half", type=float, default=None, help="half-width of the box (default 12 flyby, 8 growing_mass)")
     ap.add_argument("--out", default=None, help="output directory (default export/<case>)")
     a = ap.parse_args(argv)
     out = a.out or f"export/{a.case}"
-    if a.case == "flyby":
+    if a.case in ("flyby", "kerr_flyby"):
         half = a.half or 12.0
         times = np.linspace(-half, half, a.frames)
-        path = export_sequence(flyby(), times, out, "flyby", a.n, half, meta=dict(case="flyby", speed=0.6, mass=1.0))
+        coframe = flyby() if a.case == "flyby" else spinning_flyby()
+        meta = dict(case=a.case, speed=0.6, mass=1.0, spin=0.0 if a.case == "flyby" else 0.9)
+        path = export_sequence(coframe, times, out, a.case, a.n, half, meta=meta)
     else:
         half = a.half or 8.0
         times = np.linspace(-6.0, 6.0, a.frames)

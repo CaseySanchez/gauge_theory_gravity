@@ -26,7 +26,7 @@ def test_energy_and_angular_momentum_are_conserved_from_camera_to_disk(traced):
 def test_screen_stays_orthonormal_and_across_the_ray(traced):
     _, scene, _ = traced
     hit = scene["hit"]
-    _, k, screen = scene["crossing"]
+    _, k, screen = R.readout(scene["crossing"])
     s1, s2 = screen(al.mv.x.dual()), screen(al.mv.y.dual())
     read = lambda v: np.asarray(v.kernel)[..., 0][hit]
     assert np.abs(read(s1 | s1) + 1).max() < 5e-3 and np.abs(read(s2 | s2) + 1).max() < 5e-3
@@ -39,7 +39,7 @@ def test_frequency_ratio_matches_conserved_quantities(traced):
     photon's energy and angular momentum taken at the camera."""
     hole, scene, disk = traced
     hit = scene["hit"]
-    energy, angular = R.killing_momenta(hole, scene["start"][0], scene["start"][1])
+    energy, angular = R.killing_momenta(hole, *R.readout(scene["start"])[:2])
     position = scene["crossing"][0]
     speed = light.keplerian_speed(disk.radius, hole.spin, hole.mass)
     flow = al.time + al.mv.scalar(speed[:, None]) * R.azimuth(position[hit])
@@ -53,11 +53,31 @@ def test_frequency_ratio_matches_conserved_quantities(traced):
 def test_polarization_has_unit_intensity_and_transmission_in_range(traced):
     _, scene, _ = traced
     hit = scene["hit"]
-    coherency = R.disk_coherency(*scene["crossing"], 0.8)
+    coherency = R.disk_coherency(*R.readout(scene["crossing"]), 0.8)
     angles = np.linspace(0, np.pi, 8, endpoint=False)
     passed = np.asarray(R.transmitted(coherency, R.analyzer_slices(angles)[:, None]).kernel)[..., 0][:, hit]
     assert np.abs(passed[:4] + passed[4:] - 1).max() < 1e-12
     assert passed.min() >= 0.1 - 1e-12 and passed.max() <= 0.9 + 1e-12
+
+
+def test_local_twistor_stays_incident_with_the_ray(traced):
+    """Local twistor transport by the normal conformal connection keeps omega = 0 along a null geodesic."""
+    _, scene, _ = traced
+    assert R.twistor_incidence(scene) < 5e-3
+
+
+def test_camera_screen_read_from_the_twistor_is_the_cameras_right_and_up():
+    """The camera turns each twistor's phase so that its flag reads screen x as the camera's right (and screen y as
+    its up), each up to a multiple of the ray's momentum."""
+    hole = HOLES["kerr"]
+    (_, twistor), _ = R.static_camera(hole, 30.0, 0.5, 6, 4, np.radians(15.0))
+    _, momentum, right, up, _ = R.camera_view(hole, 30.0, 0.5, 6, 4, np.radians(15.0))
+    screen = R.screen_frame(twistor)
+    k = np.asarray(al.coordinates(momentum))
+    for axis, expected in ((al.mv.x.dual(), right), (al.mv.y.dual(), up)):
+        difference = np.asarray(al.coordinates(screen(axis))) - np.asarray(al.coordinates(expected))
+        along = difference[:, :1] / k[:, :1]
+        assert np.abs(difference - along * k).max() < 1e-12
 
 
 def test_page_thorne_temperature():

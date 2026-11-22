@@ -1,6 +1,6 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (150 tests, ~19 min on the GPU, plus one slow test: `pytest -m slow tests/test_export.py`). Demos:
+All checks below are executable: `source .venv/bin/activate && pytest` (168 tests, ~21 min on the GPU, plus one slow test: `pytest -m slow tests/test_export.py`). Demos:
 `cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy lensing kerr]` (figures in `output/`; lensing and kerr take about an hour each at 480×360 on an RTX 3060).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
@@ -52,6 +52,12 @@ What is an extensor now:
 (`gauge_theory_gravity/__init__.py`). Without it, exports and the vacuum identities in `tests/test_export.py -m slow` fail.
 The earlier `jit(vmap(holonomy_loop))` failure was on CPU and its cause was not identified; the holonomy map now
 evaluates its loops as one extensor batch instead.
+
+Compile time: numga lowers `even * scalar` (the scalar on the right, both batched) by contracting the scalar with the
+32x32x1 product table first, an `n x 32 x 32` intermediate; XLA's GPU compiler takes minutes over it once n is a few
+thousand (133 s at n = 4096, 27 min 44 s inside the ray tracer with the twistor at 16384 rays), while `scalar * even`
+compiles in under a second, and the CPU is unaffected. The ray tracer and `twistor.from_momentum` put the scalar on the
+left.
 
 ## Verified (Tier A, spec sections 2-8)
 
@@ -119,6 +125,47 @@ Derived (not stated in spec) and now pinned numerically:
   rotation along `l` itself vanishes.
 * This settles, for Kerr-Schild Kerr, the question left open below: GTG's h-function and rotation gauge field are
   exactly the coframe and Lorentz connection that the CSTA's translation and Lorentz sectors hold.
+
+## Twistors (`twistor.py`, `tests/test_twistor.py`)
+
+The pseudoscalar `I = txyzpn` squares to -1 and is central in the even subalgebra, which is therefore M(4,C), and
+Spin(2,4) = SU(2,2). Twistor space is the minimal left ideal `T = Even * P`, `P = 1/4 (1 + I xy)(1 + I tp)`: P is
+idempotent and its own reverse, and T has real dimension 8. Every even spinor of the gauge theory is four twistors,
+and `Psi P` picks one. All of the following hold to 1e-11 or better:
+* Norm `h(Z1, Z2) = 4 <~Z1 Z2>_{0,6}` (scalar plus I part, read as a complex number): Hermitian, signature (2,2). In the
+  adapted basis `h = 2 Re(conj(omega) . pi)`.
+* Split `omega = 1/2 n_inf n_o Z`, `pi = 1/2 n_o n_inf Z`: the null kernels of infinity and the origin, each h-null.
+* Versors act as SU(2,2) matrices (unit determinant, h preserved); bivectors as traceless h-antihermitian matrices.
+* Incidence: the conformal point X of an event (checked to be the translated origin) annihilates a complex 2-plane of T,
+  `omega = 1/2 x n_inf pi`; in coordinates `omega = -(i/sqrt 2) x^{AA'} pi` with `x^{AA'}` Hermitian and `det = x^2`.
+  The alpha-planes of two events meet in a complex line when the events are null separated and only in 0 otherwise.
+* Light rays: the real six-vectors annihilating a null twistor form a 2-plane; none annihilate a non-null one. `ray(Z)`
+  reads off an event and a null direction, and every event along it is incident with Z.
+* Local twistor transport: with the normal conformal connection (f = Schouten), the curvature acting on T is zero for
+  FRW (< 1e-9) and of size 0.2 for the static-lapse metric (t,x plane); a holonomy loop of side 0.05 is in SU(2,2) and
+  equals `expm(-1/2 size^2 F)` to O(size^3).
+* Momentum: the moment map of the translations, `p^mu = -Im h(Z, (s^mu ^ n_inf) Z)`, is the null flag pole of pi;
+  `from_momentum` builds a twistor through the origin with a given momentum (round trip to 1e-13, phase-invariant,
+  quadratic in Z, unchanged by translating Z). The complex trace on T is `4 <A>_{0,6}` (matches the 4x4 matrix trace).
+* Complex Weyl invariant `weyl_invariant`: 2 tr_omega(F F~) contracted over the frame = (C^2 + i C.*C)/2. For Kerr
+  (a = 0.6, three events) it equals 24 M^2 / (r - i a cos theta)^6 to 1e-10, its real part is the quadratic density to
+  1e-12, and for Schwarzschild it is real. Exported as `weyl2_dual_half` (checked eagerly through the export's field
+  function and readout on Kerr a = 0.9 and Schwarzschild); new export case `kerr_flyby` (Kerr boosted to v = 0.6).
+  The kerr_flyby export itself has not been run.
+* Ray tracer (`render.py`): each ray carries its local twistor, started at the camera from the photon's momentum
+  (omega = 0) and moved by `dZ/dlambda = -1/2 Omega(velocity) Z` with the normal connection (Lorentz plus `k ^ n_inf`;
+  Schouten zero in vacuum). At the disk (12x9 test scenes, 1800 steps), max |omega|/|pi| is 3.0e-7 (Schwarzschild) and
+  3.2e-6 (Kerr a = 0.9), and the frequency ratio read from the twistor's momentum matches the transported momentum's to
+  3.9e-8 and 8.1e-6 (`test_render.py`, tolerance 5e-3). The full-size renders were not re-run; the twistor does not
+  change the shading.
+* Twistor holonomy of Kerr a = 0.9 on the meridian plane (`render twistor`, `output/render_twistor.png`; 40x40 loops of
+  side 0.4 in (x, z), 27 s): eigenvalue deviation up to 0.345, SU(2,2) to 1.1e-14, boost fraction of the loop curvature
+  (angle of the dominant eigenvalue's logarithm from the imaginary axis) 0.8 to 88 degrees. Control, 64 loops outside
+  r = 2.5: 0.00 degrees for spin 0 and 1.3 to 56 degrees for a = 0.9, so the boost part comes from the spin. The panel
+  beside it shows the phase of the complex Weyl invariant for comparison only; the two are not compared quantitatively.
+  With spin 0, loops next to r = 0 blow up (deviation 4e8), so the figure is for Kerr only.
+* Not done: the Petrov type of Kerr from the eigenvectors of the twistor holonomy, and the infinity twistor's role in
+  breaking conformal to Poincare invariance.
 
 ## Closed-form frame fields (`cartan.Geometry`, `tests/test_types_and_frames.py`)
 

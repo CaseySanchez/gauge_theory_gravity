@@ -24,6 +24,13 @@ field equations: the proposal leaves the dynamics open, and so does the code.
 - **Kerr:** GTG's Kerr–Schild position gauge field and its rotation gauge field are exactly the translation and Lorentz
   sectors: torsion-free, vacuum, special-conformal part zero, and the curvature density reproduces the Kerr Kretschmann
   scalar. They agree with numga's independent GTG Kerr code to $10^{-16}$.
+- **Twistors:** the even subalgebra is $M(4,\mathbb C)$ with the pseudoscalar as $i$, and twistor space is its
+  minimal left ideal. The twistor norm has signature (2,2), Spin(2,4) acts as SU(2,2), incidence is $XZ=0$ (Klein
+  correspondence included), null twistors are light rays, and the normal conformal connection acts on twistors as
+  Penrose's local twistor transport: its curvature vanishes for FRW and not for a generic metric. The ray tracer
+  carries each ray's twistor, which stays incident with the ray (to $3\times10^{-6}$ for Kerr) and gives the same disk
+  redshift. Restricted to the ω half, the twistor trace of $F\tilde F$ is the complex Weyl invariant
+  $\tfrac12(C^2+i\,C{}^*C)$, exactly $24M^2/(r-ia\cos\theta)^6$ for Kerr, and is exported for ParaView.
 - **Ray tracing:** light is followed by parallel transport with the connection itself. The Schwarzschild shadow radius
   agrees with the analytic value to 0.2%.
 
@@ -48,12 +55,13 @@ Python 3.11 or later. numga is installed from GitHub at the commit this code was
 python -m venv .venv && source .venv/bin/activate
 pip install "numga[linalg,jax,examples,test] @ git+https://github.com/EelcoHoogendoorn/numga@8b22fde9" h5py vtk pillow
 pip install -U "jax[cuda12]"          # optional, for an NVIDIA GPU
-pytest                                 # 150 tests, about 19 min on an RTX 3060
+pytest                                 # 168 tests, about 21 min on an RTX 3060
 pytest -m slow tests/test_export.py    # compiles the full curvature chain on a grid
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
-python -m gauge_theory_gravity.examples.render slices holonomy lensing kerr      # lensing and kerr take about an hour each
+python -m gauge_theory_gravity.examples.render slices holonomy twistor lensing kerr   # lensing and kerr take about an hour each
 python -m gauge_theory_gravity.export flyby --n 48 --frames 16                   # ParaView time series in ./export (not in git)
+python -m gauge_theory_gravity.export kerr_flyby --n 48 --frames 16              # a moving Kerr hole, with C.*C nonzero
 ```
 
 The package sets `--xla_gpu_enable_triton_gemm=false` before JAX starts, because XLA's Triton fusion of float64 products
@@ -67,6 +75,7 @@ returned wrong values on the GPU (see RESULTS.md).
 | `fields.py`, `gauge.py`, `covariant.py`, `curvature.py`, `transport.py` | sections 4–8 of the proposal |
 | `cartan.py` | geometries as coframes with closed-form frames (Painlevé–Gullstrand, FRW, lapse, boosted, Kerr–Schild), Christoffel symbols, Lorentz connection |
 | `conformal.py`, `invariants.py`, `sta_embedding.py` | the full conformal connection, normal conditions, Schouten, Weyl squared, the Lorentz sector |
+| `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, SU(2,2) matrices, the complex Weyl invariant |
 | `export.py` | VTKHDF export of spacetime slices for ParaView |
 | `examples/` | scenarios, renders, disk light |
 | `_array/`, `tests/array_reference/` | the first, index-based implementation, kept as an independent oracle |

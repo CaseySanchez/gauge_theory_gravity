@@ -45,6 +45,20 @@ def test_series_file(tmp_path):
     assert [f["time"] for f in s["files"]] == [0.0, 0.5, 1.0]
 
 
+def test_dual_weyl_field_is_kerr_chern_pontryagin_and_zero_for_schwarzschild():
+    """weyl2_dual_half at two events, evaluated eagerly through the export's own field function and readout."""
+    from gauge_theory_gravity import algebra as al, cartan
+    mass, spin = 1.0, 0.9
+    events = np.array([[0.0, 3.0, 1.0, 2.0], [0.0, -2.5, 1.5, -1.0]])
+    kerr = ex.readout(ex.field_function(cartan.kerr(mass, spin))(al.point(events)))
+    radius = np.asarray(cartan.kerr_schild_fields(al.point(events), mass, spin)[0].kernel)[..., 0]
+    expected = 24 * mass ** 2 / (radius - 1j * spin * events[:, 3] / radius) ** 6
+    assert np.abs(kerr["weyl2_dual_half"] - expected.imag).max() < 1e-10 * np.abs(expected).max()
+    assert np.abs(kerr["weyl2_half"] - expected.real).max() < 1e-10 * np.abs(expected).max()
+    schwarzschild = ex.readout(ex.field_function(cartan.schwarzschild(mass))(al.point(events)))
+    assert np.abs(schwarzschild["weyl2_dual_half"]).max() < 1e-12
+
+
 @pytest.mark.slow
 def test_small_slice_of_schwarzschild_flyby_has_expected_fields(tmp_path):
     """Fields on a 4x4x4 grid (even, so no point lies near the singularity): in vacuum Ricci = 0, Cotton = 0,

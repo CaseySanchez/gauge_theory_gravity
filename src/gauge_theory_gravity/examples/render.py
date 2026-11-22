@@ -1,21 +1,25 @@
 """Renderings of black holes in the CSTA formulation: Schwarzschild (Painleve-Gullstrand tetrad) and Kerr (Kerr-Schild
 position gauge field).
 
-From ./src:  python -m gauge_theory_gravity.examples.render [slices holonomy lensing kerr]   (figures -> ../output)
+From ./src:  python -m gauge_theory_gravity.examples.render [slices holonomy twistor lensing kerr]   (figures -> ../output)
 Painleve-Gullstrand coordinates are regular across the horizon, so grids may run down to the centre.
 
-The rays are followed with the gauge theory of gravity's own objects: a ray's momentum `k` is a direction of the
-local frame, its position `x` an event, and the frame is carried by the Lorentz connection of the CSTA,
+The rays are followed with the gauge theory of gravity's own objects: a ray is its event `x` and the local twistor
+`Z` of its light ray, carried by the normal conformal connection of the CSTA (Lorentz plus the coframe's translations;
+the Schouten part is zero in these vacuum holes),
 
-    dx/dlambda = E(k),        dk/dlambda = -1/2 [Omega(dx/dlambda), k],
+    dx/dlambda = E(k),        dZ/dlambda = -1/2 Omega(dx/dlambda) Z,        k = momentum(Z) = pi conj(pi),
 
-i.e. the momentum is parallel transported along its own path (the geodesic equation in the frame).  The camera's
-screen, a map from screen directions to frame directions, is transported by the same commutator, as in numga's Kerr
-example.  At the disk the gas orbits on prograde Kepler orbits and glows with the Page-Thorne temperature; the ratio of
+Penrose's local twistor transport, which keeps the twistor incident with the ray (omega = 0); its Lorentz part turns pi
+as parallel transport would, so the frame momentum `k` follows the geodesic equation in the frame, and stays exactly
+null.  The phase of pi turns its null flag about `k`: the camera sets each flag along the screen's x, and the screen, a
+map from screen directions to frame directions, is read back from the flag wherever it is needed, as the parallel
+transported screen of numga's Kerr example (up to multiples of `k`).  At the disk the gas orbits on prograde Kepler
+orbits and glows with the Page-Thorne temperature; the ratio of
 the photon's frequency at the camera to that in the gas, `(k | u_camera) / (k | u_gas)`, shifts the blackbody colour,
 which carries gravitational redshift and Doppler beaming at once.  The polarization model is numga's Kerr example's:
 synchrotron-like emission polarized across a toroidal magnetic field, set up in the local frame (aberration by the gas
-is left out), read on the transported screen as a coherency map and passed through a rotating analyzer.
+is left out), read on the screen as a coherency map and passed through a rotating analyzer.
 """
 from __future__ import annotations
 
@@ -34,7 +38,7 @@ from functools import partial
 from numga import Algebra, concatenate, where
 from numga.extensor import Extensor
 
-from .. import algebra as al, cartan, conformal as cf, export, transport as tp
+from .. import algebra as al, cartan, conformal as cf, export, transport as tp, twistor as tw
 from . import light
 
 OUT = Path(__file__).resolve().parents[3] / "output"
@@ -48,7 +52,7 @@ Screen = ScreenSlice.derive.dual                                  # Antivector-
 ScreenFrame = al.ALG.gatype((Direction, Screen))                  # Direction- <- Screen-
 # The light's polarization covariance, from the slices that read the screen to screen directions.
 Coherency = al.ALG.gatype((Screen, ScreenSlice))                  # Screen- <- ScreenSlice+
-State = tuple[Extensor, Extensor, Extensor]                       # (event, frame momentum, screen)
+State = tuple[Extensor, Extensor]                                 # (event, local twistor)
 
 
 # --- field-strength slice and holonomy map ---------------------------------------------------------
@@ -125,6 +129,70 @@ def holonomy_map(half: float = 6.0, n: int = 41, size: float = 0.4, steps: int =
     print("holonomy_map: min/max =", holonomy.min(), holonomy.max())
 
 
+def twistor_holonomy(half: float = 5.0, n: int = 40, size: float = 0.4, steps: int = 10, chunk: int = 256,
+                     spin: float = 0.9) -> None:
+    """Twistor holonomy of a Kerr hole on its meridian plane (y = 0, x and z), `render_twistor.png`. Each size x size
+    loop in the (x, z) plane, centred on a grid point, transports twistors by an SU(2,2) matrix; its eigenvalues are
+    gauge invariant (a gauge transformation conjugates the matrix). Panels: how far they are from 1; the boost fraction
+    of the loop's curvature, the angle of the dominant eigenvalue's logarithm from the imaginary axis (0 for a pure
+    rotation, 90 degrees for a pure boost); and, for comparison, the phase of the local complex Weyl invariant
+    `twistor.weyl_invariant`, 6 arctan(a cos theta / r), from which a nonzero boost fraction in the meridian plane
+    comes."""
+    import jax
+
+    hole = kerr_hole(M, spin)
+    axis = np.linspace(-half, half, n)                                          # n even: the grid avoids z = 0
+    X, Z = np.meshgrid(axis, axis)
+    centres = np.stack([np.zeros(X.size), X.ravel(), np.zeros(X.size), Z.ravel()], axis=-1)
+    connection = cf.connection(hole.geometry)                                   # the normal connection in vacuum
+
+    @jax.jit
+    def around(starts: Extensor) -> Extensor:
+        return tp.holonomy_loop(connection, starts, 1, 3, size, steps, "magnus4")
+
+    corners = centres - 0.5 * size * np.array([0.0, 1.0, 0.0, 1.0])
+    matrices = []
+    for start in range(0, len(corners), chunk):
+        block = corners[start:start + chunk]
+        padding = chunk - len(block)
+        block = np.concatenate([block, np.repeat(block[-1:], padding, axis=0)]) if padding else block
+        matrices.append(tw.matrix(around(al.point(block[:, None, :])))[:chunk - padding])
+    holonomy = np.concatenate(matrices)                                         # [points, 4, 4] SU(2,2)
+    finite = np.isfinite(holonomy).all(axis=(1, 2))
+    eigenvalues = np.linalg.eigvals(np.where(finite[:, None, None], holonomy, np.eye(4)))
+    logarithms = np.log(eigenvalues)
+    dominant = logarithms[np.arange(len(logarithms)), np.abs(logarithms).argmax(axis=-1)]
+    deviation = np.where(finite, np.abs(eigenvalues - 1).max(axis=-1), np.nan).reshape(X.shape)
+    boost = np.where(finite, np.degrees(np.arctan2(np.abs(dominant.real), np.abs(dominant.imag))), np.nan).reshape(X.shape)
+    radius = np.asarray(kerr_radius(al.point(centres), M, spin).kernel)[..., 0]
+    phase = np.degrees(6 * np.arctan2(spin * centres[:, 3] / radius, radius)).reshape(X.shape)
+    phase = (phase + 180) % 360 - 180
+    fig, ax = plt.subplots(1, 3, figsize=(15, 4.6))
+    extent = [-half, half, -half, half]
+    image = ax[0].imshow(deviation + 1e-14, extent=extent, origin="lower", norm=LogNorm(1e-4, 1e0), cmap="inferno")
+    fig.colorbar(image, ax=ax[0], label="max |eigenvalue - 1|")
+    ax[0].set_title(f"twistor holonomy, {size}x{size} loops in (x, z)")
+    image = ax[1].imshow(boost, extent=extent, origin="lower", vmin=0, vmax=90, cmap="viridis")
+    fig.colorbar(image, ax=ax[1], label="degrees")
+    ax[1].set_title("boost fraction of the loop's curvature\n(0 rotation, 90 boost)")
+    image = ax[2].imshow(phase, extent=extent, origin="lower", vmin=-180, vmax=180, cmap="twilight_shifted")
+    fig.colorbar(image, ax=ax[2], label="degrees")
+    ax[2].set_title("phase of the complex Weyl invariant\n6 arctan(a cos theta / r)")
+    for a in ax:
+        a.add_patch(plt.Circle((0, 0), hole.horizon, fill=False, color="w", lw=1, ls="--"))
+        a.plot([-spin, spin], [0, 0], "wo", ms=3)                               # the ring singularity
+        a.set_xlabel("x"); a.set_ylabel("z")
+    fig.suptitle(f"{hole.name}: twistor holonomy on the meridian plane y = 0 (horizon dashed, ring dots)")
+    fig.tight_layout(); fig.savefig(OUT / "render_twistor.png", dpi=130); plt.close(fig)
+    unitary = np.abs(np.einsum("pji,jk,pkl->pil", holonomy[finite].conj(), HERMITIAN, holonomy[finite]) - HERMITIAN).max()
+    print(f"twistor_holonomy: max |eigenvalue - 1| {np.nanmax(deviation):.3g}, boost fraction "
+          f"{np.nanmin(boost):.1f}..{np.nanmax(boost):.1f} deg, max |H^+ h H - h| {unitary:.1e}, "
+          f"{(~finite).sum()} loops not finite")
+
+
+HERMITIAN = np.block([[np.zeros((2, 2)), np.eye(2)], [np.eye(2), np.zeros((2, 2))]])   # the twistor norm in coordinates
+
+
 # --- the holes -----------------------------------------------------------------------------------
 def kerr_radius(position: Extensor, mass: float, spin: float) -> Extensor:
     """The oblate radius of an event in the Kerr-Schild geometry."""
@@ -160,23 +228,29 @@ def kerr_hole(mass: float = M, spin: float = 0.9) -> Hole:
 
 
 # --- ray tracing ---------------------------------------------------------------------------------
-def rates(hole: Hole, position: Extensor, momentum: Extensor, screen: Extensor) -> State:
-    """The rates of a ray: the coordinate velocity is the momentum carried out of the frame, `E(k)`; the frame momentum
-    and the camera screen are parallel transported by the Lorentz connection along it, `-1/2 [Omega(velocity), .]`."""
+def rates(hole: Hole, position: Extensor, twistor: Extensor) -> State:
+    """The rates of a ray: the coordinate velocity is the twistor's momentum carried out of the frame, `E(k)`, and the
+    twistor moves by the normal conformal connection, `-1/2 Omega(velocity) Z`: the Lorentz connection along the
+    velocity, which turns pi (its momentum and flag) as parallel transport would, plus the translation part, the
+    coframe's image of the velocity, `e(E(k)) = k`, as the bivector `k ^ n_inf`, which keeps omega = 0."""
+    momentum = tw.momentum(twistor)                                                     # [...] Direction-
     velocity = hole.geometry.frame(position)(momentum).cast(Direction)                  # [...] Direction-
     turning = hole.lorentz(position)(velocity)                                          # [...] Bivector+
-    # A Lorentz bivector turns spacetime directions among themselves, so the rates stay in their own types.
-    return velocity, (-turning.commutator(momentum)).cast(Direction), (-turning.commutator(screen)).cast(ScreenFrame)
+    conformal = turning + (momentum & al.INFINITY).dual().cast(al.Bivector)             # [...] Bivector+
+    return velocity, (-0.5 * conformal * twistor).cast(tw.Twistor)
 
 
 def runge_kutta(rates: Callable[..., State], state: State, size: Extensor, first: State | None = None) -> State:
     """One fourth-order step of a state, a tuple of extensors, along its rates; each keeps its own type. `first`, the
     rates at the start, may be passed in when already known (the previous step's end)."""
+    # The step size multiplies from the left: numga contracts a right-hand scalar with the product table first, which
+    # for an even multivector (the twistor) builds a batch of 32 x 32 matrices that XLA's GPU compiler takes tens of
+    # minutes over; from the left the contraction is with the multivector first and compiles at once.
     first = rates(*state) if first is None else first
-    second = rates(*(value + rate * (size / 2) for value, rate in zip(state, first)))
-    third = rates(*(value + rate * (size / 2) for value, rate in zip(state, second)))
-    fourth = rates(*(value + rate * size for value, rate in zip(state, third)))
-    return tuple((value + (a + 2 * b + 2 * c + d) * (size / 6)).cast(value.gatype)
+    second = rates(*(value + (size / 2) * rate for value, rate in zip(state, first)))
+    third = rates(*(value + (size / 2) * rate for value, rate in zip(state, second)))
+    fourth = rates(*(value + size * rate for value, rate in zip(state, third)))
+    return tuple((value + (size / 6) * (a + 2 * b + 2 * c + d)).cast(value.gatype)
                  for value, a, b, c, d in zip(state, first, second, third, fourth))
 
 
@@ -220,9 +294,23 @@ def orthonormal(vector: Extensor, previous: list[Extensor]) -> Extensor:
 def static_camera(hole: Hole, distance: float, field_of_view: float, nx: int, ny: int,
                   inclination: float = np.radians(20.0)) -> tuple[State, float]:
     """Initial state for every pixel: a static observer at `distance`, `inclination` above the disk plane (z = 0),
-    looking at the hole. The ray's frame momentum is the arriving photon's, `k = u - n` for the unit direction n the pixel
-    looks along, so that `k | u = 1`, traced backward with a negative step. The screen maps the screen's x and y to the
-    camera's right and up, made orthogonal to the pixel's ray. Also returns the image plane's half-width."""
+    looking at the hole. The ray's local twistor passes through the camera's event (omega = 0) with the arriving
+    photon's frame momentum, `k = u - n` for the unit direction n the pixel looks along, so that `k | u = 1`, traced
+    backward with a negative step; its phase sets its flag along the camera's right, made orthogonal to the pixel's ray,
+    so that `screen_frame` reads the screen's x and y as the camera's right and up. Also returns the image plane's
+    half-width."""
+    events, momentum, right_axis, up_axis, half = camera_view(hole, distance, field_of_view, nx, ny, inclination)
+    twistor = tw.from_momentum(momentum)                                        # [pixels] the ray's local twistor
+    # A phase turns the flag by twice itself about k; turn each one from where it lies onto the camera's right.
+    across = tw.flag_direction(twistor, al.time)
+    angle = np.arctan2(-np.asarray((across | up_axis).kernel)[..., 0], -np.asarray((across | right_axis).kernel)[..., 0])
+    return (events, tw.with_phase(twistor, -angle / 2)), half
+
+
+def camera_view(hole: Hole, distance: float, field_of_view: float, nx: int, ny: int,
+                inclination: float = np.radians(20.0)) -> tuple[Extensor, Extensor, Extensor, Extensor, float]:
+    """Each pixel's camera event, frame momentum `k = u - n` and the camera's right and up made orthogonal to the
+    pixel's ray (unit Directions, screen x and y), with the image plane's half-width; see `static_camera`."""
     position = al.point([0.0, distance * np.cos(inclination), 0.0, distance * np.sin(inclination)])
     frame = hole.geometry(position)
     observer = frame(al.time)
@@ -245,10 +333,26 @@ def static_camera(hole: Hole, distance: float, field_of_view: float, nx: int, ny
     momentum = (observer - looking).cast(Direction)                             # [pixels] the photon's frame momentum
     right_axis = orthonormal(across, [observer, looking])                       # [pixels] Direction-
     up_axis = orthonormal(upward, [observer, looking, right_axis])              # [pixels] Direction-
-    # Screen x and y are read by the slices -x and -y (x & x.dual() = -1 in this signature).
-    screen = (right_axis * (-al.x & Screen) + up_axis * (-al.y & Screen)).cast(ScreenFrame)   # [pixels] Direction- <- Screen-
     events = (position + 0 * looking).cast(Direction)                           # [pixels] the camera's event, per pixel
-    return (events, momentum, screen), half
+    return events, momentum, right_axis, up_axis, half
+
+
+def screen_frame(twistor: Extensor) -> Extensor:
+    """The camera screen carried along with a ray's twistor: screen x along its flag, screen y along the flag of
+    e^{I pi/4} Z (a quarter turn on), each the unit direction across the ray orthogonal to the frame's time direction.
+    Lorentz transport turns flag and screen alike and the camera set the flag on screen x, so this is the parallel
+    transported screen up to multiples of the momentum; the choice orthogonal to the frame's time direction makes it
+    read a frame direction by its part across the ray in the frame's rest space.  Direction- <- Screen-."""
+    right = tw.flag_direction(twistor, al.time)                                 # [...] Direction-
+    up = tw.flag_direction(tw.with_phase(twistor, np.pi / 4), al.time)          # [...] Direction-
+    # Screen x and y are read by the slices -x and -y (x & x.dual() = -1 in this signature).
+    return (right * (-al.x & Screen) + up * (-al.y & Screen)).cast(ScreenFrame)
+
+
+def readout(state: State) -> tuple[Extensor, Extensor, Extensor]:
+    """A ray's event, frame momentum and screen, the last two read from its twistor."""
+    position, twistor = state
+    return position, tw.momentum(twistor), screen_frame(twistor)
 
 
 def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: float, steps: int, r_in: float,
@@ -297,9 +401,9 @@ def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: fl
         parts.append((tuple(value[:count] for value in final), np.asarray(hit)[:count],
                       tuple(value[:count] for value in crossing)))
         print(f"trace: {begin + count}/{pixels} rays", flush=True)
-    final = tuple(concatenate([part[0][k] for part in parts]) for k in range(3))
+    final = tuple(concatenate([part[0][k] for part in parts]) for k in range(len(start)))
     hit = np.concatenate([part[1] for part in parts])
-    crossing = tuple(concatenate([part[2][k] for part in parts]) for k in range(3))
+    crossing = tuple(concatenate([part[2][k] for part in parts]) for k in range(len(start)))
     radius_final = np.asarray(hole.radius(final[0]).kernel)[..., 0]
     return dict(start=start, final=final, crossing=crossing, hit=np.asarray(hit), escaped=radius_final > 100.0,
                 a=half, shape=(ny, nx))
@@ -307,7 +411,7 @@ def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: fl
 
 def sky_directions(hole: Hole, final: State) -> np.ndarray:
     """The unit direction each escaped ray came from: minus the spatial part of its coordinate velocity at the end."""
-    velocity = np.asarray(al.coordinates(hole.geometry.frame(final[0])(final[1])))[..., 1:]
+    velocity = np.asarray(al.coordinates(hole.geometry.frame(final[0])(tw.momentum(final[1]))))[..., 1:]
     return -velocity / np.linalg.norm(velocity, axis=-1, keepdims=True)
 
 
@@ -341,7 +445,7 @@ def killing_momenta(hole: Hole, position: Extensor, momentum: Extensor) -> tuple
 
 
 def disk_coherency(position: Extensor, momentum: Extensor, screen: Extensor, degree: float) -> Extensor:
-    """Disk emission as a unit-intensity polarization covariance on the transported screen (numga's Kerr model): the
+    """Disk emission as a unit-intensity polarization covariance on the screen (numga's Kerr model): the
     toroidal field circles z; emission is polarized across it and across the ray, in the meridian plane, by `degree`
     times how far the ray is from looking along the field.  Screen- <- ScreenSlice+."""
     direction = cartan.SpacePart(momentum) / (al.t & momentum)                           # [...] unit spatial heading
@@ -376,9 +480,10 @@ class Disk:
 
 
 def disk_view(hole: Hole, scene: dict, temperature_scale: float) -> Disk:
-    """Evaluate the disk physics at every crossing: redshift from the transported momentum, Page-Thorne temperature."""
+    """Evaluate the disk physics at every crossing: redshift from the twistor's momentum, Page-Thorne temperature."""
     hit = scene["hit"]
-    position, momentum, _ = scene["crossing"]
+    position, twistor = scene["crossing"]
+    momentum = tw.momentum(twistor)
     radius = np.asarray(hole.radius(position).kernel)[..., 0]
     coordinates = np.asarray(al.coordinates(position))
     ratio = np.asarray(frequency_ratio(hole, position, momentum).kernel)[..., 0]
@@ -423,10 +528,17 @@ def sky_light(hole: Hole, scene: dict) -> np.ndarray:
     return light.sky_colour(sky_directions(hole, scene["final"]), light.star_texture())
 
 
+def twistor_incidence(scene: dict) -> float:
+    """How well local twistor transport kept each disk ray's twistor on its ray: the largest |omega| / |pi| at the
+    disk, zero while the twistor passes through the ray's current event."""
+    coordinates = tw.coordinates(scene["crossing"][1][scene["hit"]])
+    return float((np.linalg.norm(coordinates[:, :2], axis=-1) / np.linalg.norm(coordinates[:, 2:], axis=-1)).max())
+
+
 def conservation_error(hole: Hole, scene: dict) -> float:
     """Largest change of the photon's energy and angular momentum between camera and disk, relative to the energy."""
-    camera = killing_momenta(hole, scene["start"][0], scene["start"][1])
-    disk = killing_momenta(hole, scene["crossing"][0], scene["crossing"][1])
+    camera = killing_momenta(hole, scene["start"][0], tw.momentum(scene["start"][1]))
+    disk = killing_momenta(hole, scene["crossing"][0], tw.momentum(scene["crossing"][1]))
     hit = scene["hit"]
     return float(max(np.abs(disk[k][hit] - camera[k][hit]).max() for k in (0, 1)) / np.abs(camera[0]).max())
 
@@ -490,6 +602,7 @@ def report(hole: Hole, scene: dict, disk: Disk) -> None:
           f" observed temperature up to {disk.temperature.max():.0f} K")
     print(f"{hole.name}: conservation of k.d_t and k.d_phi from camera to disk, max relative change "
           f"{conservation_error(hole, scene):.1e}")
+    print(f"{hole.name}: local twistor at the disk, max |omega|/|pi| {twistor_incidence(scene):.1e}")
 
 
 def save_gif(frames: list[np.ndarray], path: Path, duration: int, width: int = 960) -> None:
@@ -508,7 +621,7 @@ def kerr(nx=480, ny=360, D=50.0, fov=0.7, steps=1800, r_out=14.0, incl=np.radian
     """The same camera and disk around a Kerr hole, `render_kerr.png`: frame dragging flattens the approaching side of
     the shadow, and the disk reaches in to the prograde innermost stable orbit.  From the same trace,
     `render_polarizer.gif`: the disk through a linear analyzer turning half a revolution; the polarization, carried to the
-    camera on the transported screen, sweeps a dark band across the image. Disk light is doubled behind the analyzer, so
+    camera on the screen carried by each ray's twistor, sweeps a dark band across the image. Disk light is doubled behind the analyzer, so
     unpolarized parts keep their brightness."""
     hole = kerr_hole(M, spin)
     scene, disk, sky, inner = disk_scene(hole, nx, ny, D, fov, steps, r_out, incl)
@@ -517,7 +630,7 @@ def kerr(nx=480, ny=360, D=50.0, fov=0.7, steps=1800, r_out=14.0, incl=np.radian
                   OUT / "render_kerr.png")
     report(hole, scene, disk)
     hit = scene["hit"]
-    coherency = disk_coherency(*scene["crossing"], degree)                               # [pixels] Screen- <- ScreenSlice+
+    coherency = disk_coherency(*readout(scene["crossing"]), degree)                             # [pixels] Screen- <- ScreenSlice+
     angles = np.linspace(0, np.pi, frames, endpoint=False)
     passed = np.asarray(transmitted(coherency, analyzer_slices(angles)[:, None]).kernel)[..., 0]   # [frames, pixels]
     # Unit intensity: two crossed analyzers pass all the light between them (frames is even, so frame k + frames/2 is
@@ -530,7 +643,7 @@ def kerr(nx=480, ny=360, D=50.0, fov=0.7, steps=1800, r_out=14.0, incl=np.radian
              OUT / "render_polarizer.gif", 60)
 
 
-ALL = dict(slices=slices, holonomy=holonomy_map, lensing=lensing, kerr=kerr)
+ALL = dict(slices=slices, holonomy=holonomy_map, twistor=twistor_holonomy, lensing=lensing, kerr=kerr)
 
 if __name__ == "__main__":
     for name in (sys.argv[1:] or ALL):
