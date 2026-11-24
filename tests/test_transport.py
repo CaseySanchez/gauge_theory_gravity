@@ -36,7 +36,7 @@ def test_convergence_order():
     assert error(10, "magnus4") / error(20, "magnus4") > 12
 
 
-def test_reparametrisation_invariance():
+def test_reparametrization_invariance():
     Om = fl.random_connection_field(4, 0.4)
     X1 = X0 + al.point([0.4, 0.3, -0.2, 0.5])
 

@@ -1,472 +1,669 @@
-# Deep dive: the design, and the mathematics it implements
+# Deep dive: how the code realizes the proposal
 
-This document explains how the code in `src/gauge_theory_gravity/` realises the conformal gauge connection of
-the proposal in [README.md](README.md) (the "spec") on `numga` extensors. Each section gives
-the mathematics, then the code that expresses it, then how it is checked. Results and caveats are in
-`RESULTS.md`; the original plan is `PLAN.md`.
+This document walks through `src/gauge_theory_gravity/` from the algebra up: what each object is mathematically,
+how it is written on [numga](https://github.com/EelcoHoogendoorn/numga) extensors, and how it is checked. Section
+numbers such as §6 refer to the proposal in [README.md](README.md). Every numerical claim, with its test and
+tolerance, is recorded in [RESULTS.md](RESULTS.md).
 
-Notation: spacetime indices $\mu,\nu$ (coordinates) and $a,b$ (frame), both over $\{t,x,y,z\}$; conformal indices
-$A,B$ over six directions. $[X,Y]=XY-YX$ is the full commutator. Everything is in $\mathrm{Cl}(2,4;\mathbb R)$ with
-`Algebra("t+x-y-z-p+n-")`, i.e. $\eta=\mathrm{diag}(+,-,-,-,+,-)$, exactly the spec's convention.
+**Conventions.** The algebra is $\mathrm{Cl}(2,4;\mathbb R)$, `Algebra("t+x-y-z-p+n-")`, with metric
+$\eta=\mathrm{diag}(+,-,-,-,+,-)$, where `p` is $e_+$ and `n` is $e_-$. Spacetime indices $\mu,\nu$ are coordinate
+indices and $a,b$ frame indices, both over $t,x,y,z$. $[X,Y]=XY-YX$ is the full commutator; numga's `commutator` is
+half of it. $\widetilde X$ is the reverse.
 
 ---
 
-## 1. The algebra and its generators (`algebra.py`)
+## 1. The algebra (`algebra.py`)
 
-### 1.1 Null basis
+### 1.1 Null basis and generators
 
-With $e_+=\mathtt p$ ($e_+^2=+1$) and $e_-=\mathtt n$ ($e_-^2=-1$),
-
-$$
+```math
 n_o=\tfrac1{\sqrt2}(e_++e_-),\qquad n_\infty=\tfrac1{\sqrt2}(e_+-e_-),\qquad
-n_o^2=n_\infty^2=0,\quad n_o\!\cdot\! n_\infty=1 .
-$$
+n_o^2=n_\infty^2=0,\qquad n_o\cdot n_\infty=1 .
+```
 
-### 1.2 Fifteen bivectors in four sectors
+The fifteen bivectors split into the four sectors of §3:
 
-$$
-M_{ab}=e_a\wedge e_b\ (6),\quad P_a=e_a\wedge n_\infty\ (4),\quad K_a=e_a\wedge n_o\ (4),\quad D=n_o\wedge n_\infty\ (1).
-$$
+```math
+M_{ab}=e_a\wedge e_b\ (6),\qquad P_a=e_a\wedge n_\infty\ (4),\qquad K_a=e_a\wedge n_o\ (4),\qquad D=n_o\wedge n_\infty\ (1).
+```
 
-Checked (`tests/test_algebra.py`): the 15 generators are linearly independent, and their commutators close
-as $\mathfrak{so}(2,4)$:
+`GENS` lists them in this order. `GEN`, the $15\times15$ matrix from generator coordinates to numga's blade order, is
+used only to specify test connections and to compute structure constants; nothing in the construction goes through
+it. `tests/test_algebra.py` checks that the generators are independent, that they close as
+$\mathfrak{so}(2,4)$ with the expected pattern ($[M,P]\subset P$, $[P,P]=[K,K]=0$, $[D,P]\propto P$ and
+$[D,K]\propto K$ with opposite signs, $[P,K]\subset M\oplus D$), and the Jacobi identity.
 
-$$
-[M,M]\subset M,\ [M,P]\subset P,\ [M,K]\subset K,\ [M,D]=0,\ [P,P]=[K,K]=0,\
-[D,P]\propto P,\ [D,K]\propto K\ (\text{opposite sign}),\ [P,K]\subset M\oplus D .
-$$
-
-### 1.3 Sector projectors as extensor expressions
+### 1.2 Sector projectors
 
 A bivector decomposes uniquely as
 
-$$
-B=B_M+u\wedge n_\infty+v\wedge n_o+b\,n_o\wedge n_\infty,\qquad u,v\ \text{spacetime vectors},\ B_M\ \text{Lorentz}.
-$$
+```math
+B=B_M+u\wedge n_\infty+v\wedge n_o+b\,n_o\wedge n_\infty ,
+```
 
-Contracting with the null vectors on the left (using $n_o\!\cdot\!n_o=0$, $n_o\!\cdot\!n_\infty=1$,
-$n_{o,\infty}\!\cdot u=0$):
+with $u,v$ spacetime vectors and $B_M$ a Lorentz bivector. Contracting with the null vectors,
 
-$$
-n_o\lrcorner B=-u-b\,n_o,\qquad n_\infty\lrcorner B=-v+b\,n_\infty,\qquad
-b=-\,n_\infty\lrcorner(n_o\lrcorner B).
-$$
+```math
+n_o\cdot B=-u-b\,n_o,\qquad n_\infty\cdot B=-v+b\,n_\infty,\qquad b=-\,n_\infty\cdot(n_o\cdot B),
+```
 
-Hence
+so the projectors are
 
-$$
+```math
 \begin{aligned}
-\Pi_D(B)&=-\,n_o\!\wedge\! n_\infty\ \bigl[n_\infty\lrcorner(n_o\lrcorner B)\bigr],\\
-\Pi_P(B)&=-(n_o\lrcorner B)\wedge n_\infty-\Pi_D(B),\\
-\Pi_K(B)&=-(n_\infty\lrcorner B)\wedge n_o-\Pi_D(B),\\
-\Pi_M(B)&=B-\Pi_P-\Pi_K-\Pi_D .
+\Pi_D(B)&=-\,(n_o\wedge n_\infty)\,\bigl[n_\infty\cdot(n_o\cdot B)\bigr],\\
+\Pi_P(B)&=-(n_o\cdot B)\wedge n_\infty-\Pi_D(B),\\
+\Pi_K(B)&=-(n_\infty\cdot B)\wedge n_o-\Pi_D(B),\\
+\Pi_M(B)&=B-\Pi_P(B)-\Pi_K(B)-\Pi_D(B).
 \end{aligned}
-$$
-
-In code these are literally four extensors `Bivector <- Bivector` (`D_PART`, `P_PART`, `K_PART`, `M_PART`),
-written with `|` (inner product), `^` and the bare type `Bivector` (the identity map). They apply to a bivector
-or to any bivector-valued map, e.g. `al.sector(F, "K")` on a curvature map. A test checks them against the
-coordinate split through the $15\times15$ generator matrix. That matrix `GEN` is kept only to *specify*
-test connections and for the structure-constant test.
-
----
-
-## 2. Fields as typed maps (`fields.py`)
-
-The key design decision: the gauge connection is not a table of components but a linear map. In the spec,
-$\Omega(a,x)$ is bivector-valued and linear in the direction $a$. In numga that is the type
-
-$$
-\Omega(x):\ \texttt{Bivector}\leftarrow\texttt{Direction},
-$$
-
-where `Direction` is the type of spacetime events and directions. Following numga's conformal idiom (points are
-intrinsic antivectors, spheres and planes extrinsic vectors), a direction is an *intrinsic antivector*: the dual of
-one of $t,x,y,z$, a grade-5 blade in this 6D algebra. It is read by an *extrinsic* `Slice`, a vector in
-$\{t,x,y,z\}$, through the regressive product, `slice & direction`; the coordinate slices `SLICES = [t, -x, -y, -z]`
-read the coordinate directions `DIRECTIONS = [t*, x*, y*, z*]` as $\delta^\mu_\nu$. The metric on directions is still
-`|` ($d_\mu|d_\nu=\eta_{\mu\nu}$). numga checks orientations statically, so adding a slice to a direction, or feeding a
-slice to $\Omega$, is a type error before any arithmetic. Binding a direction gives a bivector: `Omega(a)`. A versor
-field is an `Even` extensor, a spinor likewise; both are extrinsic, as generators and motions are. A *field* is a
-callable on an event, itself an extensor of type `Direction`.
-
-The directional derivative $a\cdot\nabla$ is numga's `derivative`: for $f(x)$ of type $S\leftarrow(I\dots)$ it
-produces $S\leftarrow(I\dots,\ \text{step})$, so for the connection
-
-$$
-\mathtt{derivative(Omega)(x)}\,(b,a)\;=\;a\!\cdot\!\nabla\,\Omega(b).
-$$
-
-(Argument order: the connection's own input first, the step last.) Everything below is built from this.
-A finite-difference `fd_derivative` with the same result type (4th-order stencil) exists to confirm the
-autodiff and to test convergence order.
-
----
-
-## 3. Gauge transformations and the covariant derivative (spec §5, §6; `gauge.py`, `covariant.py`)
-
-**Transformation.** For a versor field $V(x)\in\mathrm{Spin}(2,4)$ (so $V\tilde V=1$),
-
-$$
-\Omega'(a)=V\,\Omega(a)\,\tilde V-2\,(a\!\cdot\!\nabla V)\,\tilde V .
-$$
-
-In code: `V >> Omega` is the sandwich $V\Omega\tilde V$ of the map's *output* (the input $a$ is a position-space
-direction and is not transformed), and the inhomogeneous term is `-2 * (dV(x) * ~V(x))`, with `dV = derivative(V)`
-of type `Even <- Direction`. It is grade-projected with `.restrict[2]`.
-
-That the result is a pure bivector is a claim of the spec; it holds because
-$(\partial V)\tilde V$ is a bivector for $V\tilde V=1$ (differentiate: $(\partial V)\tilde V+V\,\partial\tilde V=0$,
-so $(\partial V)\tilde V$ is reverse-antisymmetric, hence of grade 2 or 6 in $\mathrm{Cl}(2,4)$; that the
-grade-6 (pseudoscalar) part vanishes is not derived here). The test measures the non-bivector residual
-directly for $V=\exp(B(x))$, and finds it zero (1e-11).
-
-**Covariant derivative.** $\mathcal D_a\Psi=a\!\cdot\!\nabla\Psi+\tfrac12\Omega(a)\Psi$, code:
-`derivative(Psi)(x) + 0.5 * (Omega(x) * Psi(x))`. Gauge covariance, $\mathcal D'\Psi'=V\mathcal D\Psi$ with
-$\Psi'=V\Psi$:
-
-$$
-(\partial V)\Psi+V\partial\Psi+\tfrac12\bigl(V\Omega\tilde V-2(\partial V)\tilde V\bigr)V\Psi
-=V\partial\Psi+\tfrac12V\Omega\Psi,
-$$
-
-using $\tilde VV=1$. Verified numerically for random $V,\Omega,\Psi$ (1e-11 exact derivative, 1e-7 finite
-difference).
-
-**Pure gauge.** $\Omega=0\mapsto\Omega'=-2(\partial V)\tilde V$. Then $\mathcal D(V\Phi)=V\,\partial\Phi$, so
-$V\Phi_0$ is covariantly constant: such connections are flat.
-
----
-
-## 4. Curvature (spec §7; `curvature.py`)
-
-For coordinate vectors (so $-\Omega([a,b])=0$):
-
-$$
-F(a,b)=a\!\cdot\!\nabla\Omega(b)-b\!\cdot\!\nabla\Omega(a)+\tfrac12[\Omega(a),\Omega(b)] .
-$$
-
-Why the $\tfrac12$ is right: $[\mathcal D_a,\mathcal D_b]\Psi=\tfrac12\bigl(\partial_a\Omega_b-\partial_b\Omega_a\bigr)\Psi
-+\tfrac14[\Omega_a,\Omega_b]\Psi=\tfrac12F(a,b)\Psi$. Both this identity and the $\tfrac12$ are tested.
-
-**Code.** With `d = derivative(Omega)(x)` of inputs $(b,a)$:
-
-```python
-F = permute_inputs(d, (1, 0)) - d + Om.commutator(Om)
 ```
 
-`permute_inputs(d,(1,0))(a,b)=d(b,a)=a\!\cdot\!\nabla\Omega(b)`; `d(a,b)=b\!\cdot\!\nabla\Omega(a)`; and numga's
-`commutator` is $(XY-YX)/2$, which is exactly the spec's $\tfrac12[\Omega(a),\Omega(b)]$. The product
-`Om.commutator(Om)` of two single-input maps is a two-input map with inputs in order of appearance, $(a,b)$.
-`permute_inputs` is a small local helper because numga has no axis permutation for multilinear maps.
+In code these are four extensors of type `Bivector <- Bivector` (`D_PART`, `P_PART`, `K_PART`, `M_PART`), written with
+`|`, `^` and the bare type `Bivector`, which acts as the identity map. Because they are maps, they apply to a bivector
+or to any bivector-valued map: `al.sector(F, "K")` is the special-conformal part of a whole curvature map.
 
-**Properties checked:** $F$ is bivector valued; antisymmetric in $(a,b)$; covariant,
-$F'=V F\tilde V$ (`V >> F`); zero for pure gauge, non-zero otherwise; and the Bianchi identity
+### 1.3 Translators and conformal points
 
-$$
-\oint_{(\lambda,a,b)}\Bigl(\partial_\lambda F(a,b)+\tfrac12[\Omega(\lambda),F(a,b)]\Bigr)=0 ,
-$$
+The translation generators move the origin. For an event $x$ the translator
 
-implemented as the cyclic sum of a three-input map (the adjoint covariant derivative has the $\tfrac12$
-because bivectors act on bivectors through $\tfrac12[\Omega,\cdot]$).
-
----
-
-## 5. Parallel transport and holonomy (spec §8; `transport.py`)
-
-Parallel transport solves $\gamma'\!\cdot\mathcal D\Psi=0$, i.e. $\dot\Psi=-\tfrac12\Omega(\gamma')\Psi$, so
-$\Psi(s)=T(s)\Psi(0)$ with $\dot T=-\tfrac12\Omega(\gamma')\,T$. Later steps multiply on the **left**:
-
-$$
-T=\mathcal P\exp\!\Bigl(-\tfrac12\!\int_\gamma\Omega\Bigr)=\prod_{k=N}^{1}\exp\bigl(-\tfrac12\Omega(\gamma'_k)\,\Delta s\bigr).
-$$
-
-`omega(x)(v)` is the binding of the velocity $v=\gamma'(s)$ into the connection map. Two schemes:
-
-- midpoint ($O(h^2)$): one exponential per step;
-- Magnus-4 ($O(h^4)$), with $A_i=-\tfrac12\Omega(\gamma'(s+c_i h))$, $c_{1,2}=\tfrac12\mp\tfrac{\sqrt3}{6}$:
-  $\Theta=\tfrac h2(A_1+A_2)-\tfrac{\sqrt3}{12}h^2[A_1,A_2]$, code uses numga's half-commutator, hence $\tfrac{\sqrt3}{6}h^2\,A_1.\mathrm{commutator}(A_2)$.
-
-A versor stays a versor under this scheme because each factor is the exponential of a bivector
-($T\tilde T=1$ to 1e-10). Orders of convergence are tested ($\approx4\times$ and $\approx16\times$ error drop
-per halving).
-
-**Holonomy.** For the loop $x_0\to+\mu\to+\nu\to-\mu\to-\nu$ of side $\epsilon$:
-
-$$
-T_{\text{loop}}=\exp\!\bigl(-\tfrac12\,\epsilon^2\,F(e_\mu,e_\nu)\bigr)+O(\epsilon^3).
-$$
-
-The sign was not assumed: the test fits $\pm$ against numerics, finds $-$ in three different planes, and also
-checks that the error scales as $\epsilon^3$. This is the concrete content of "curvature is the failure of
-parallel transport to be path independent", and the reason pure-gauge connections give $T_{\text{loop}}=1$ while a
-generic $\Omega$ does not: a global versor field cannot reproduce a general connection (spec §8).
-
----
-
-## 6. Geometry from a tetrad (`cartan.py`)
-
-Spacetime geometry enters through a coframe $e^a{}_\nu$, an extensor $\texttt{Direction}_{\text{frame}}\leftarrow\texttt{Direction}_{\text{coord}}$,
-$e(\partial_\nu)=e^a{}_\nu e_a$. The algebra's own metric supplies the rest:
-
-$$
-g=e\,|\,e\quad(\text{a form},\ g_{\mu\nu}=\eta_{ab}e^a{}_\mu e^b{}_\nu),\qquad E=e^{-1}.
-$$
-
-Each geometry is a `Geometry(coframe, frame)` and carries $E$ in closed form. Where the coframe is the identity plus a
-*null dyad*, $e=\mathrm{Id}+N$ with $N^2=0$, the frame is $E=\mathrm{Id}-N$: for Painlevé–Gullstrand
-$N=\beta\,(t\,\&\,\cdot)$ and the time slice does not read the spatial shift, so $t\cdot\beta=0$ and $N^2=0$; for
-Kerr–Schild $N=-f\,l\,(l\cdot)$ with $l$ flat-null. FRW, the lapse metric and the boost have their own closed forms.
-A bare coframe field falls back to `e.inverse()`.
-
-### 6.1 Christoffel symbols
-
-From `dg = derivative(g)` (a three-input form, $\partial_\gamma g_{\alpha\beta}$ with inputs $(\alpha,\beta,\gamma)$):
-
-$$
-\Gamma_{\lambda\mu\nu}=\tfrac12\bigl(\partial_\mu g_{\lambda\nu}+\partial_\nu g_{\lambda\mu}-\partial_\lambda g_{\mu\nu}\bigr)
-=\tfrac12\bigl(\mathrm{perm}_{(0,2,1)}\,dg+dg-\mathrm{perm}_{(2,0,1)}\,dg\bigr).
-$$
-
-### 6.2 The Lorentz connection as a bivector map
-
-The Levi-Civita connection written in the frame is
-$\omega_\mu{}^a{}_b=e^a{}_\lambda\bigl(\partial_\mu E_b{}^\lambda+\Gamma^\lambda_{\mu\sigma}E_b{}^\sigma\bigr)$,
-defined by $\nabla_\mu E_b=\omega_\mu{}^a{}_bE_a$. Lowering the first index with $\eta$, the trilinear form
-
-$$
-W(c,\mu,b)=\Gamma(E_c,\partial_\mu,E_b)+e_c\!\cdot\!\bigl(e(\partial_\mu E_b)\bigr)
-$$
-
-is $\omega_{\mu\,cb}$ (the first term binds the frame vectors into $\Gamma_{\lambda\mu\nu}$; the second is
-$\eta_{cd}e^d{}_\lambda\partial_\mu E_b{}^\lambda$). The bivector connection of the CSTA is
-
-$$
-\Omega(\partial_\mu)=\tfrac12\,\omega_\mu{}^{ab}\,e_a\wedge e_b=\tfrac12\,\omega_{\mu\,ab}\,e^a\wedge e^b ,
-$$
-
-obtained with two metric contractions:
-
-```python
-B = (W * (S ^ S)).contract(1, 4).contract(2, 3)     # sums W(e_k,.,e_l) e^k ^ e^l
-Omega = 0.5 * B
+```math
+T_x=\exp\bigl(\tfrac12\,x\wedge n_\infty\bigr)=1+\tfrac12\,x\,n_\infty
 ```
 
-**The normalisation is not a choice.** For a bivector $B$, $\tfrac12[B,v]=B\lrcorner v$, so
-$\tfrac12[\Omega(\partial_\mu),v]=\omega_\mu{}^a{}_c\,v^c e_a$, i.e. the algebra's adjoint action reproduces the
-frame-component covariant derivative of a vector, and consequently the curvature $F$ of §4, evaluated on this
-connection, *is* the Riemann bivector map $R^{ab}{}_{\mu\nu}$. Both statements are tested against an independent
-index implementation that builds $R^a{}_{b\mu\nu}$ from Christoffel symbols directly.
+is exact at first order because $(x\wedge n_\infty)^2=0$, and the event's conformal point is the origin carried there:
 
-### 6.3 Spacetimes used
+```math
+X=T_x\,n_o\,\widetilde T_x .
+```
 
-| Geometry | Coframe | Nature |
-|---|---|---|
-| Schwarzschild, Painlevé–Gullstrand | $e^0=dt,\ e^i=dx^i+\beta^i dt$, $\beta=\sqrt{2M/r}\,\hat x$ | vacuum; regular through $r=2M$ |
-| spatially flat FRW | $e^0=dt,\ e^i=a(t)dx^i$ | conformally flat, with matter |
-| static lapse | $e^0=N(\mathbf x)dt,\ e^i=dx^i$ | generic: Weyl, Ricci and Cotton all non-zero |
-| boosted PG | $e'^a{}_\nu(x)=e^a{}_\mu(Lx)L^\mu{}_\nu$ | vacuum, moving hole |
-| PG with $M(t)$ | as PG, $M\to M(t)$ | toy with matter |
-| Kerr, Cartesian Kerr–Schild | $e=\mathrm{Id}-f\,l\,(l\cdot)$, $f=Mr^3/(r^4+a^2z^2)$, $l=\partial_t-n$ ingoing null | vacuum, rotating; GTG's position gauge field |
+`al.translator(event)` and `al.conformal_point(event) = translator(event) >> n_o` implement this; `>>` is numga's
+sandwich. $X$ is null, has weight $X\cdot n_\infty=1$, and reads back the event's coordinates.
 
-Painlevé–Gullstrand coordinates are used because the spatial slices are flat Euclidean, the tetrad is simple, and
-nothing blows up at the horizon, which makes the interior grids and ray tracing well defined down to $r\to0$.
+### 1.4 The pseudoscalar
+
+$I=e_te_xe_ye_ze_+e_-$ squares to $-1$, commutes with every even element and anticommutes with every vector. It is
+the imaginary unit of the twistor construction (§7).
 
 ---
 
-## 7. The conformal connection and the Cartan reading (spec §9, §10; `conformal.py`)
+## 2. Types and fields (`algebra.py`, `fields.py`)
 
-With the translation sector identified with the coframe, the full 15-component connection is
+### 2.1 Directions are intrinsic
 
-$$
-\boxed{\ \Omega=\Omega_{\text{Lorentz}}+e\wedge n_\infty+f\wedge n_o+b\,(n_o\wedge n_\infty)\ }
-$$
+The proposal's objects are linear maps with typed inputs and outputs, so the code represents them as extensors
+rather than component tables. Following numga's conformal idiom, events and spacetime directions are **intrinsic
+antivectors**: `Direction` is the dual of the slice algebra `t+x-y-z-`, a grade-5 type in six dimensions. They are
+read by **extrinsic slices**, vectors in $t,x,y,z$, through the regressive product `slice & direction`.
 
-where $e$ is the coframe, $f:\texttt{Direction}\leftarrow\texttt{Direction}$ the special-conformal part and $b$ a form
-(dilation). With directions intrinsic, the wedges are written as joins with the conformal origin and infinity, both
-intrinsic points: the translation generator along $d$ is $(d\,\&\,\infty^*)^* = e_d\wedge n_\infty$ and the
-special-conformal one $(d\,\&\,o^*)^* = e_d\wedge n_o$, the construction numga's conformal examples use.
+- `DIRECTIONS = [t*, x*, y*, z*]` are the coordinate directions $\partial_\mu$.
+- `SLICES = [t, -x, -y, -z]` read them: `SLICES[mu] & DIRECTIONS[nu]` is $\delta^\mu_\nu$.
+- The metric on directions is still `|`, with $\partial_\mu|\partial_\nu=\eta_{\mu\nu}$.
+- `ORIGIN` and `INFINITY` are $n_o$ and $n_\infty$ as intrinsic points.
 
-### 7.1 Sectors of the curvature
+numga checks orientation statically, so adding a slice to a direction, or feeding a slice where the connection
+expects a direction, fails before any arithmetic runs. Generators, versors and spinors are extrinsic.
 
-$F$ splits with the projectors of §1.3:
-
-| Sector | Meaning |
+| Object | Type |
 |---|---|
-| $\Pi_P F$ | torsion: $de+\omega\wedge e$ (vanishes for Levi-Civita) |
-| $\Pi_M F$ | Riemann, minus $e\wedge f$ terms: becomes Weyl after normalisation |
-| $\Pi_K F$ | Cotton: $df+\omega\wedge f$-type |
-| $\Pi_D F$ | $e\cdot f$ antisymmetrised, zero when $f$ is symmetric in this sense |
+| connection $\Omega(x)$ | `Bivector <- Direction` |
+| curvature $F(x)$ | `Bivector <- (Direction, Direction)` |
+| coframe $e(x)$ | `Direction <- Direction` (frame from coordinate) |
+| versor $V(x)$, spinor $\Psi(x)$, twistor $Z$ | `Even` |
 
-### 7.2 Normal conditions
+### 2.2 Fields and derivatives
 
-The *normal* conformal Cartan connection fixes $f$ by requiring torsion-free ($\Pi_PF=0$), $\Pi_DF=0$ and
-$\Pi_MF$ trace-free:
+A field is a Python callable from an event (a `Direction` extensor, possibly batched) to an extensor. Its derivative
+is numga's `derivative`, exact by autodiff: for a field of type $S\leftarrow(I_1,\dots)$ it returns a field of type
+$S\leftarrow(I_1,\dots,\text{step})$. For the connection,
 
-$$
-\mathrm{Ric}(\nu)=\sum_a e^a\lrcorner\,\Pi_MF(E_a,\nu)=0
-\qquad\bigl(\texttt{(-FM(E, D).commutator(D)).contract(1, 3)}\bigr).
-$$
+```math
+\texttt{derivative(Omega)(x)}(b,a)=a\cdot\nabla\,\Omega(b),
+```
 
-The conditions are affine in the 16 unknowns $f^a{}_\mu$ and involve no derivatives of $f$ (so they are pointwise).
-The code builds the residual as an extensor expression, assembles its 16 columns from unit perturbations of $f$
-(exact, since the residual is affine in $f$) and solves the 16-unknown least squares. Result, in every test spacetime and to 1e-16:
+with the map's own input first and the step last. `finite_difference` produces the same type with a fourth-order
+central stencil; it exists to test the autodiff and the convergence orders. `permute_inputs` reorders the inputs of a
+multilinear map, which numga has no operation for.
 
-$$
-\boxed{\ f^a{}_\mu=P^a{}_\mu=\tfrac12\Bigl(\mathrm{Ric}^a{}_\mu-\tfrac R6\,e^a{}_\mu\Bigr)\ }
-$$
-
-the Schouten tensor (rank 16, so the solution is unique). In this normalisation the proportionality constant is
-exactly 1. The Schouten tensor is computed separately from the Lorentz curvature alone with the same contraction,
-so the equality $f=P$ is a genuine check of the construction.
-
-With $f=P$: $\Pi_PF=0$, $\Pi_DF=0$ always; $\Pi_MF$ is the Weyl tensor; $\Pi_KF$ is the Cotton tensor, which is
-zero for FRW (conformally flat) and in vacuum, and non-zero for the lapse metric.
-
-### 7.3 The quadratic action density
-
-Take the scalar part of $F\tilde F$ with both index pairs contracted through the metric:
-
-$$
-I=g^{\mu\rho}g^{\nu\sigma}\,\langle F_{\mu\nu}\tilde F_{\rho\sigma}\rangle_0,
-$$
-
-in code the two `.contract` calls on $F(E,E)\,\tilde{F(E,E)}$. Results (three spacetimes, 1e-9):
-
-$$
-I[\text{normal connection}]=\tfrac12\,C_{abcd}C^{abcd},\qquad
-I[\text{Lorentz only}]=\tfrac12\,R_{abcd}R^{abcd}\ \text{(Ricci-flat)},
-$$
-
-with $C^2=R_{abcd}R^{abcd}-2R_{ab}R^{ab}+\tfrac13R^2$ in four dimensions. For Schwarzschild $R_{abcd}R^{abcd}=48M^2/r^6$,
-so $I=24M^2/r^6$ (verified to 1e-11).
-
-This is the spec's §10 remark made concrete: a quadratic curvature action of the normal conformal connection is
-Weyl-squared, not Einstein, gravity. **Only the Lagrangian density was checked**: no field equations (Bach), no
-compensator, no symmetry breaking. Einstein recovery (spec §11.4) remains open.
+Test fields are random polynomials $c_0+c_1(x)+c_2(x,x)$ whose coefficients are multilinear maps (`fields.polynomial`),
+so they are smooth and genuinely position-dependent; a random versor field is the exponential of such a bivector
+field.
 
 ---
 
-## 8. Generator roles through the conformal action of versors (tests)
+## 3. Gauge structure, §5–8 (`gauge.py`, `covariant.py`, `curvature.py`, `transport.py`)
 
-Points embed as the null intrinsic point $X=o+x-\tfrac12x^2\,\infty$, with $o=n_o^*$, $\infty=n_\infty^*$ and $x$ the
-event's direction (null because $n_o\!\cdot n_\infty=+1$); its coordinates are read by the slices, its weight by the
-sphere at infinity, `n_inf & X`. A versor acts by `V >> X`. Measured, with $V=\exp(cG)$:
+### 3.1 Gauge transformations
 
-| Generator | Effect on $x$ | Why |
+For a versor field $V(x)$ with $V\widetilde V=1$,
+
+```math
+\Omega'(a)=V\,\Omega(a)\,\widetilde V-2\,(a\cdot\nabla V)\,\widetilde V .
+```
+
+In `transform_connection`, `rotor >> omega(x)` sandwiches the map's output (its input $a$ is a direction of position
+and is not transformed), and the second term is `-2 * (gradient(x) * ~rotor).restrict[2]`. That the full expression is
+a bivector is a claim of §5: $(\partial V)\widetilde V$ is reverse-antisymmetric, so it can only have grades 2 and 6,
+and `non_bivector_part` measures the remainder directly; it is zero to rounding for $V=\exp B(x)$.
+
+### 3.2 Covariant derivative
+
+```math
+\mathcal D_a\Psi=a\cdot\nabla\Psi+\tfrac12\,\Omega(a)\Psi ,
+```
+
+written `gradient(x) + 0.5 * (omega(x) * spinor(x))`, a map `Even <- Direction`. Gauge covariance,
+$\mathcal D'_a(V\Psi)=V\mathcal D_a\Psi$, follows from $\widetilde VV=1$ and is checked for random fields. From
+$\Omega=0$ the transformation gives the pure-gauge connection $-2(\nabla V)\widetilde V$ (`pure_gauge`), under which
+$V\Psi_0$ is covariantly constant, so pure-gauge connections are flat.
+
+### 3.3 Curvature
+
+For coordinate directions the $\Omega([a,b])$ term vanishes and
+
+```math
+F(a,b)=a\cdot\nabla\Omega(b)-b\cdot\nabla\Omega(a)+\tfrac12[\Omega(a),\Omega(b)] .
+```
+
+With `d = derivative(Omega)(x)`, whose inputs are $(b,a)$:
+
+```python
+F = permute_inputs(d, (1, 0)) - d + connection.commutator(connection)
+```
+
+numga's `commutator` is $(XY-YX)/2$, exactly the $\tfrac12[\,,]$ of §7, and the product of two one-input maps is a
+two-input map with inputs in order of appearance. The factor $\tfrac12$ is fixed by
+
+```math
+[\mathcal D_a,\mathcal D_b]\Psi=\tfrac12\,F(a,b)\Psi ,
+```
+
+which `commutator_of_derivatives` computes from the covariant derivative itself. The tests also check that $F$ is
+antisymmetric, covariant ($F'=V\,F\,\widetilde V$), zero for pure gauge, and satisfies the Bianchi identity
+
+```math
+\sum_{\text{cyclic }(l,a,b)}\Bigl(\partial_lF(a,b)+\tfrac12\bigl[\Omega(l),F(a,b)\bigr]\Bigr)=0 .
+```
+
+### 3.4 Parallel transport and holonomy
+
+Transport along $\gamma$ solves $\dot\Psi=-\tfrac12\Omega(\dot\gamma)\Psi$, so $\Psi(s)=T(s)\Psi(0)$ with later steps on
+the left:
+
+```math
+T=\mathcal P\exp\Bigl(-\tfrac12\int_\gamma\Omega\Bigr)=\prod_{k=N}^{1}\exp\bigl(-\tfrac12\,\Omega(\dot\gamma_k)\,\Delta s\bigr).
+```
+
+All steps of a path are one batch: positions, velocities, the connection bound to them, and their exponentials, whose
+ordered product is numga's `cumprod` (it multiplies later elements on the left). Two schemes are implemented:
+
+- midpoint, second order;
+- fourth-order Magnus with two Gauss points, $\Theta=\tfrac h2(A_1+A_2)-\tfrac{\sqrt3}{12}h^2[A_1,A_2]$ with
+  $A_i=-\tfrac12\Omega(\dot\gamma)$ at $s+(\tfrac12\mp\tfrac{\sqrt3}6)h$; with numga's half-commutator the second term is
+  $\tfrac{\sqrt3}{6}h^2\,A_1\text{.commutator}(A_2)$.
+
+Each factor is the exponential of a bivector, so $T$ stays a versor. Around the rectangle
+$x_0\to+\mu\to+\nu\to-\mu\to-\nu$ of side $\epsilon$ (`holonomy_loop`),
+
+```math
+T_{\text{loop}}=\exp\bigl(-\tfrac12\,\epsilon^2F(\partial_\mu,\partial_\nu)\bigr)+O(\epsilon^3).
+```
+
+The sign was measured, not assumed: the test fits both signs in three planes, and checks that the error scales as
+$\epsilon^3$.
+
+---
+
+## 4. Geometry from a coframe (`cartan.py`)
+
+### 4.1 Coframe, metric, frame
+
+Spacetime geometry enters as a coframe $e(\partial_\nu)=e^a{}_\nu\,\partial_a$, an extensor
+`Direction <- Direction` from coordinate to frame directions. The metric is the algebra's own metric pulled back,
+$g=e\,|\,e$, and the frame is $E=e^{-1}$.
+
+Each `Geometry` carries its frame in closed form. Gauge theory gravity writes its fields as the identity plus dyads,
+and where the dyad squares to zero the inverse is immediate:
+
+```math
+e=\mathrm{Id}+N,\quad N^2=0\quad\Longrightarrow\quad E=\mathrm{Id}-N .
+```
+
+- **Painlevé–Gullstrand:** `Direction + shift * (t & Direction)`, with shift $\beta=\sqrt{2M/r}\,\hat x$. The time
+  slice does not read the spatial shift, so the dyad squares to zero.
+- **Kerr–Schild:** `Direction - profile * null * (null.dual_inverse() & Direction)`, with $l$ null in the flat
+  metric (`null_dyad`).
+- **FRW and the static lapse:** `TimePart + a * SpacePart` and `N * TimePart + SpacePart`, inverted term by term.
+- **Boost:** a rotor sandwich, $e'(x)=e(R\rhd x)\circ(R\rhd\cdot)$ with $R=\exp\bigl(\tfrac12\mathrm{artanh}(v)\,t\wedge x\bigr)$,
+  and frame $E'(x)=R^{-1}\rhd E(R\rhd x)$ (`rotor << ...`).
+
+A bare coframe field falls back to `e.inverse()`. `tests/test_types_and_frames.py` checks every closed-form frame
+against the inverse.
+
+### 4.2 Christoffel symbols and the Lorentz connection
+
+From the derivative of the metric, a three-input form with inputs $(\alpha,\beta,\gamma)$ for
+$\partial_\gamma g_{\alpha\beta}$:
+
+```math
+\Gamma_{\lambda\mu\nu}=\tfrac12\bigl(\partial_\mu g_{\lambda\nu}+\partial_\nu g_{\lambda\mu}-\partial_\lambda g_{\mu\nu}\bigr),
+```
+
+assembled by `christoffel_lower` with two `permute_inputs`. The spin connection in the frame, with its first index
+lowered, is the trilinear form
+
+```math
+W(c,\mu,b)=\Gamma(E_c,\partial_\mu,E_b)+e_c\cdot e(\partial_\mu E_b),
+```
+
+and the bivector connection is
+
+```math
+\Omega(\partial_\mu)=\tfrac12\,W(\partial_k,\mu,\partial_l)\,s^k\wedge s^l ,
+```
+
+summed over the slices $s^k$ that read the frame directions:
+
+```python
+bivectors = (W * (Slice ^ Slice)).trace(1, 4).trace(2, 3)
+Omega = 0.5 * bivectors
+```
+
+The normalization is forced, not chosen: for a bivector, $\tfrac12[B,v]=B\cdot v$, so
+$\tfrac12[\Omega(\partial_\mu),v]$ is the frame covariant derivative of $v$, and the curvature of §3.3 evaluated on this
+connection is the Riemann bivector map. Both are checked against the index implementation in `_array/`, which builds
+$R^a{}_{b\mu\nu}$ from Christoffel symbols directly.
+
+### 4.3 Geometries
+
+| Geometry | Coframe | Character |
 |---|---|---|
-| $P_a$ | $x\to x+2c\,e_a$, $\infty$ fixed | translation; the sandwich doubles the parameter |
-| $D$ | $x\to e^{-2\lambda}x$ | dilation, same factor of two |
-| $K_a$ | fixes $o$; preserves the null cone | special conformal |
-| $M_{ab}$ | $x^2$ preserved, no rescaling | Lorentz |
+| Schwarzschild (`schwarzschild`) | Painlevé–Gullstrand, $e^0=dt$, $e^i=dx^i+\beta^idt$ | vacuum; regular through $r=2M$ |
+| growing mass (`growing_mass`) | as above with $M(t)$ rising by a tanh | torsion-free toy with matter |
+| FRW (`friedmann`) | $e^0=dt$, $e^i=a(t)dx^i$, $a=t^{2/3}$ | conformally flat, with matter |
+| static lapse (`static_lapse`) | $e^0=N(\mathbf x)dt$, $e^i=dx^i$ | Weyl, Ricci and Cotton all nonzero |
+| boosted (`boosted`) | $e'(x)=e(Lx)L$ | a moving hole |
+| Kerr (`kerr`) | $e=\mathrm{Id}-f\,l\,(l\cdot)$, $f=Mr^3/(r^4+a^2z^2)$, $l=\partial_t-n$ | vacuum, rotating; GTG's position gauge field |
 
-This confirms the spec's labelling: $P_a=e_a\wedge n_\infty$ really generates translations (it fixes the point at
-infinity $n_\infty$), $K_a=e_a\wedge n_o$ fixes the origin.
-
----
-
-## 9. The flyby field data and the `shift` array (`export.py`)
-
-For the boosted geometry $e'^a{}_\nu(x)=e^a{}_\mu(Lx)L^\mu{}_\nu$ with $L$ the boost in the $t$–$x$ plane
-($t'=\gamma(t-vx)$, $x'=\gamma(x-vt)$), the translation-sector component $e'^i{}_0$ stored as `shift` is
-
-$$
-\texttt{shift}^i=\gamma\bigl(\beta^i(y)-v\,\delta^i_x\bigr),\qquad y=Lx,\quad \beta(y)=\sqrt{2M/r_y}\,\hat y .
-$$
-
-Consequences for the picture:
-
-- far away $\to-\gamma v\,\hat x=-0.75\,\hat x$ (a uniform frame artefact, pointing against the hole's motion),
-- plus an outward part $\gamma\sqrt{2M/r_y}$ (outward: it is the coframe component, and the physical infall
-  velocity of the rain frame is $-\beta$),
-- a stagnation point ahead of the hole where the two cancel: $\sqrt{2M/r_y}=v\Rightarrow r_y=2M/v^2\approx5.6M$
-  (rest frame), i.e. $\approx4.4M$ ahead in the lab,
-- the pattern translates with the hole and is contracted by $1/\gamma$ along $x$.
-
-The `shift` array is a gauge-dependent component of the connection; the gauge-invariant arrays are
-`weyl2_half`, `riem2_half`, `ricci_scalar`. Exported fields are evaluated pointwise on a regular grid (`jit(vmap)` in
-chunks) and written as VTKHDF ImageData, one file per time step plus a `.series` index. The writer's layout was
-checked by reading with VTK's own reader.
+Both black-hole charts are horizon-penetrating, so grids and ray tracing can run inside the horizon.
 
 ---
 
-## 10. Why this architecture
+## 5. The conformal connection, §9–10 (`conformal.py`, `invariants.py`)
 
-**Extensors for the CSTA objects.** The spec's objects are linear maps with a typed output and typed input:
-$\Omega:\texttt{Direction}\to\texttt{Bivector}$, $F:(\texttt{Direction},\texttt{Direction})\to\texttt{Bivector}$,
-$e:\texttt{Direction}\to\texttt{Direction}$, the sector projectors $\texttt{Bivector}\to\texttt{Bivector}$. Binding is
-$\Omega(a)$; composition is a function call; the adjoint action is `>>`; contractions are `.contract`.
-This removed index bookkeeping from the curvature, Bianchi, spin connection, Ricci, Schouten and the invariants.
+### 5.1 The full connection
 
-**Idiom.** Following `numga/examples`: module-level named types, small named functions, no `lambda` and no
-`jax.numpy` in the package. Geometries are *identity plus dyads*, as in gauge theory gravity:
-$e_{PG}=\mathrm{Id}+\beta\,(t\,\&\,\cdot)$ is `Direction + shift * (t & Direction)`, Kerr is
-`Direction - profile * null * (null.dual_inverse() & Direction)`, FRW and the lapse metric are
-`TimePart + a * SpacePart` and `N * TimePart + SpacePart`, and a boost is a rotor sandwich,
-$e'(x)=e(R\rhd x)\circ(R\rhd\cdot)$ with $R=\exp(\tfrac12\,\mathrm{artanh}(v)\,t\wedge x)$. Test fields are random
-polynomials $c_0+c_1(x)+c_2(x,x)$ of multilinear maps. Positions, steps and loops are batch axes of extensors, and the ordered
-product of step versors is `cumprod` (numga multiplies later elements on the left, which is the transport order).
+With the translation sector identified with the coframe,
 
-**Where arrays remain (and why).**
-- the $15\times15$ generator matrix `GEN`: converts between generator coordinates and numga's blade order, used to
-  specify test connections and in the structure-constant test;
-- the 16-unknown linear solve for the normal conditions (numpy `lstsq` on columns assembled from extensor residuals);
+```math
+\Omega=\Omega_{\text{Lorentz}}+e\wedge n_\infty+f\wedge n_o+b\,(n_o\wedge n_\infty),
+```
+
+where $f$ is a `Direction <- Direction` map (special conformal part) and $b$ a form (dilation). Because directions are
+intrinsic, the wedges are joins with intrinsic points: the translation generator along a direction $d$ is
+$(d\,\&\,n_\infty^{*})^{*}=e_d\wedge n_\infty$, written `(coframe(x) & al.INFINITY).dual()`, and the special-conformal
+one uses `al.ORIGIN` the same way.
+
+### 5.2 Curvature sectors and the normal conditions
+
+The projectors of §1.2 split $F$:
+
+| Sector | Content |
+|---|---|
+| $\Pi_PF$ | torsion; zero for the Levi-Civita connection |
+| $\Pi_MF$ | Riemann minus terms in $e\wedge f$ |
+| $\Pi_KF$ | the Cotton-type derivative of $f$ |
+| $\Pi_DF$ | the antisymmetric part of $e\cdot f$ |
+
+The normal conformal connection fixes $f$ by three conditions: $\Pi_PF=0$, $\Pi_DF=0$, and $\Pi_MF$ trace-free, where
+the trace is the Ricci map
+
+```math
+\mathrm{Ric}(\nu)=\sum_a e^a\cdot\Pi_MF(E_a,\nu),
+```
+
+written `(-lorentz(frame, Direction).commutator(Direction)).contract(1, 3)`. The conditions are affine in the sixteen
+components of $f$ and involve no derivative of $f$, so they hold pointwise. `solve_normal_f` builds the residual for
+sixteen unit perturbations of $f$ (exact, by affinity) and solves the least-squares system. In every test spacetime
+the system has rank 16 and the solution is
+
+```math
+f=P=\tfrac12\Bigl(\mathrm{Ric}-\tfrac R6\,e\Bigr),
+```
+
+the Schouten tensor, with coefficient exactly 1. `schouten` computes $P$ independently, from the Lorentz curvature
+alone, so the equality is a real check. With $f=P$, $\Pi_PF=\Pi_DF=0$, $\Pi_MF$ is the Weyl tensor, and $\Pi_KF$ is the
+Cotton tensor: zero for FRW and in vacuum, nonzero for the lapse metric.
+
+### 5.3 The quadratic density
+
+```math
+I=g^{\mu\rho}g^{\nu\sigma}\,\bigl\langle F_{\mu\nu}\widetilde F_{\rho\sigma}\bigr\rangle_0 ,
+```
+
+evaluated in the frame as `(framed * ~framed).restrict[0].contract(1, 3).contract(1, 2)` with `framed = F(E, E)`.
+For the normal connection $I=\tfrac12C_{abcd}C^{abcd}$; for the Lorentz connection alone, in vacuum,
+$I=\tfrac12R_{abcd}R^{abcd}$, which is $24M^2/r^6$ for Schwarzschild. `weyl_squared` computes $C^2$ independently as
+$R_{abcd}R^{abcd}-2R_{ab}R^{ab}+\tfrac13R^2$. This is the remark of §10 made concrete: a curvature-squared action of the
+normal connection is Weyl-squared gravity. Only the density is computed; there are no field equations.
+
+### 5.4 Generator roles
+
+Acting on conformal points with $V=\exp(cG)$ confirms the labels of §3
+(`tests/test_invariants_and_conformal_action.py`):
+
+| Generator | Effect |
+|---|---|
+| $P_a$ | $x\to x+2c\,e_a$, $n_\infty$ fixed: translation (the sandwich doubles the parameter) |
+| $D$ | $x\to e^{-2\lambda}x$: dilation |
+| $K_a$ | fixes $n_o$, preserves the null cone: special conformal |
+| $M_{ab}$ | preserves $x^2$: Lorentz |
+
+### 5.5 The Lorentz sector and Kerr
+
+`sta_embedding.py` embeds a Lorentz connection and measures leakage: Lorentz rotors keep the sector closed, while a
+general $\mathrm{Spin}(2,4)$ transformation moves it into the other sectors, so restricting to the Lorentz sector is a
+gauge choice (§9.1). For Kerr (`tests/test_kerr.py`), the coframe and the Lorentz connection reproduce GTG's position
+and rotation gauge fields from numga's independent Kerr code; the connection is torsion-free and Ricci-flat, the
+normal $f$ vanishes, and $2I$ equals the Kerr Kretschmann scalar.
+
+---
+
+## 6. Twistors (`twistor.py`)
+
+### 6.1 Twistor space
+
+Since $I$ is central in the even subalgebra and $I^2=-1$, the even subalgebra is $M(4,\mathbb C)$ and
+$\mathrm{Spin}(2,4)\cong SU(2,2)$. The idempotent
+
+```math
+P=\tfrac14\bigl(1+I\,e_xe_y\bigr)\bigl(1+I\,e_te_+\bigr),\qquad P^2=P=\widetilde P,
+```
+
+has rank one, and twistor space is the left ideal $\mathbb T=\mathcal G^+P$, four complex dimensions. `Twistor` is the
+type `Even`, since elements of the ideal are general even multivectors. Left multiplication by a versor, a connection
+or a transport acts on twistors unchanged, so `covariant_derivative`, `transport` and `holonomy_loop` apply to twistors
+as they are.
+
+- **Norm:** `inner` computes $h(Z_1,Z_2)=4\langle\widetilde Z_1Z_2\rangle_{0,6}$, a scalar plus an $I$ part, read as a
+  complex number by `as_complex`. Reversion is its adjoint, so versors preserve it. Its signature is $(2,2)$.
+- **Coordinates:** the basis `BASIS` $=[\omega^0,\omega^1,\pi_0,\pi_1]$ is built from the seeds $\sqrt2P$ and
+  $\sqrt2\,e_xe_zP$; in it $h=2\,\mathrm{Re}(\bar\omega\cdot\pi)$. `coordinates` and `from_coordinates` convert, and
+  `matrix` gives the $4\times4$ complex matrix of an even element.
+
+### 6.2 The ω/π split and incidence
+
+```math
+\omega=\tfrac12\,n_\infty n_oZ\quad(n_\infty\omega=0),\qquad \pi=\tfrac12\,n_on_\infty Z\quad(n_o\pi=0).
+```
+
+The two projectors (`OMEGA_PART`, `PI_PART`) are idempotents summing to one. Lorentz bivectors commute with both, so
+they act on each half separately; translations $e_a\wedge n_\infty$ map $\pi$ into $\omega$, special conformal
+transformations map $\omega$ into $\pi$, and the dilation scales the halves oppositely.
+
+An event and a twistor are incident when $XZ=0$ with $X=T_xn_o\widetilde T_x$ (`incidence`). Since
+$XZ=T_x\,n_o\,(\widetilde T_xZ)$, this holds exactly when the twistor translated back to the origin has no $\omega$
+half, that is $Z=T_x\pi_0$, or $\omega=\tfrac12\,x\,n_\infty\pi$. `through(event, momentum)` builds such twistors as
+`translator(event) * pi(momentum)`. In coordinates $\omega=-\tfrac{i}{\sqrt2}\,x^{AA'}\pi$ with $x^{AA'}$ Hermitian of
+determinant $x^2$, Penrose's $\omega=ix\pi$ up to normalization.
+
+For a null twistor, $h(Z,Z)=0$, the real vectors annihilating $Z$ span a totally null 2-plane, the twistor's light
+ray; `annihilator` finds it by an SVD of the map $V\mapsto VZ$, and `ray` reads off an event and the null direction. A
+non-null twistor is annihilated by no real vector.
+
+### 6.3 Momentum and flag
+
+The momentum is the moment map of the translations, $p^a=-\mathrm{Im}\,h(Z,(e^a\wedge n_\infty)Z)$. Because the
+scalar part is cyclic and $I$ is central in the even subalgebra, and $Z\widetilde Z$ (its own reverse) has only grades
+0 and 4, this reduces to one product:
+
+```math
+p^a=4\,\bigl\langle (e^a\wedge n_\infty)\,\langle Z\widetilde Z\rangle_4\,I\bigr\rangle_0 .
+```
+
+It is null and future-pointing, Penrose's $p=\pi\bar\pi$, independent of $\omega$ and of the phase of $Z$.
+`from_momentum` inverts it for a ray through the origin.
+
+The phase is seen by the **null flag**: the real part of the self-dual bivector $\epsilon_{AB}\pi^A\pi^B$, which
+`flag` evaluates against each Lorentz generator. It is a null bivector $k\wedge s$, with $s$ a unit spacelike
+direction across the ray, fixed up to multiples of $k$. Multiplying $Z$ by $e^{I\theta}$ (`with_phase`) turns $s$ by
+$2\theta$ about $k$, and a Lorentz rotor carries the flag direction of $Z$ to that of $RZ$ as it carries vectors.
+`flag_direction(Z, u)` picks the representative orthogonal to a timelike direction $u$. The flag is quadratic, not
+Hermitian, in $\pi$; since $I$ is central in the even subalgebra, no even element conjugates a twistor, so the flag is
+computed in coordinates rather than as a product.
+
+### 6.4 Local twistor transport
+
+With the normal conformal connection of §5.2, $\mathcal D_aZ=a\cdot\nabla Z+\tfrac12\Omega(a)Z$ is Penrose's local twistor
+transport. Its curvature on $\mathbb T$ vanishes for FRW and not for the lapse metric, and holonomy loops lie in
+$SU(2,2)$ and match $\exp(-\tfrac12\epsilon^2F)$. Along a null geodesic, the translation part $k\wedge n_\infty$ moves
+$\pi$ into $\omega$ at the rate the event moves, so a twistor through the current event stays through it; this is
+what the ray tracer uses (§7).
+
+### 6.5 The complex Weyl invariant
+
+Lorentz bivectors act on the $\omega$ half by their self-dual part, so the trace of the curvature squared over that
+half is complex:
+
+```math
+\mathcal W=2\Bigl\langle\tfrac12\,n_\infty n_o\,F(E_a,E_b)\,\widetilde F(E^a,E^b)\Bigr\rangle_{0,6} =
+\tfrac12\bigl(C_{abcd}C^{abcd}+i\,C_{abcd}{}^*C^{abcd}\bigr).
+```
+
+`weyl_invariant` computes it. Its real part is $I$ of §5.3; its imaginary part is half the Chern–Pontryagin density.
+For Kerr it equals $24M^2/(r-ia\cos\theta)^6$, and for Schwarzschild it is real.
+
+---
+
+## 7. The ray tracer (`examples/render.py`, `examples/light.py`)
+
+### 7.1 State and equations
+
+A ray is its event $x$ and the local twistor $Z$ of its light ray, both in the frame:
+
+```math
+\dot x=E(k),\qquad \dot Z=-\tfrac12\,\Omega_{\text{conf}}(\dot x)\,Z,\qquad k=\texttt{momentum}(Z),
+```
+
+with $\Omega_{\text{conf}}$ the Lorentz connection plus the translation $k\wedge n_\infty$ (the Schouten part is zero in
+vacuum). `rates` returns the two derivatives; `runge_kutta` steps them with fourth-order Runge–Kutta. The Lorentz part
+turns $\pi$ as parallel transport would, so $k$ obeys the geodesic equation in the frame and stays exactly null; the
+translation part keeps $\omega=0$ relative to the moving event.
+
+The step size multiplies from the left, `(size / 2) * rate`. With the scalar on the right, numga contracts it with the
+product table first, which for an even multivector builds an $n\times32\times32$ intermediate that XLA's GPU compiler
+took 27 minutes over at 16384 rays; from the left the whole step compiles in seconds.
+
+### 7.2 Camera and screen
+
+`camera_view` places a static observer at distance $D$ and inclination $i$ above the disk plane, and gives each pixel
+the photon momentum $k=u-n$ (so $k\cdot u=1$) and the camera's right and up made orthogonal to the ray.
+`static_camera` builds each twistor with `from_momentum` and turns its phase so that its flag lies along the camera's
+right.
+
+The polarization needs the camera screen at the disk. Because Lorentz transport turns flag and screen alike,
+`screen_frame` reads it from the twistor: screen $x$ along the flag, screen $y$ along the flag of $e^{I\pi/4}Z$ (a
+quarter turn on), each orthogonal to the frame's time direction. This equals the parallel-transported screen up to
+multiples of $k$. The emission axis is orthogonal to $k$, so those multiples do not change the polarization.
+`readout(state)` returns the event, momentum and screen.
+
+### 7.3 Tracing
+
+Rays are traced backward from the camera with steps $-0.03\,\mathrm{clip}(r,1,10)$ in the affine parameter, in chunks of
+16384 through one compiled `lax.scan`. A ray stops when it escapes ($r>120$, counted as escaped beyond $r=100$) or falls
+below $1.1\,r_+$; in these horizon-penetrating charts a backward ray hugging the horizon would otherwise continue onto
+an unphysical branch. Rays continue through the disk so the shadow is measured on its own. The first crossing of
+$z=0$ within the disk is located by cubic Hermite interpolation of the step, using the rates carried in the scan, refined
+by two Newton steps on the height.
+
+### 7.4 Disk light and polarization
+
+From numga's Kerr example (`light.py`, MIT): prograde Kepler gas from the innermost stable orbit, the Page–Thorne
+temperature, and blackbody color through the Wyman–Sloan–Shirley fit of the CIE matching functions, tone-mapped over
+a star field. The frequency ratio observed/emitted is $1/(k\cdot u_{\text{gas}})$ with $k\cdot u_{\text{camera}}=1$, which carries
+gravitational redshift and Doppler shift together. Emission is polarized across a toroidal field in the local frame
+(gas aberration is left out), stored as a unit-intensity coherency `Screen <- ScreenSlice` on the screen and read by
+a rotating analyzer.
+
+### 7.5 Twistor holonomy figure
+
+`twistor_holonomy` transports twistors around $0.4\times0.4$ loops in the meridian plane of Kerr ($a=0.9$) with the normal
+connection and plots three panels: the largest $|\lambda-1|$ of each loop's $SU(2,2)$ matrix, how boost-like the loop's
+curvature is (the angle of the dominant eigenvalue's logarithm from the imaginary axis, 0° rotation to 90° boost), and
+for comparison the phase of $\mathcal W$, $6\arctan(a\cos\theta/r)$. In type D the Weyl curvature acts on self-dual
+bivectors as multiplication by $\Psi_2\propto(r-ia\cos\theta)^{-3}$, so the boost fraction follows
+$|\arg\Psi_2|=3\arctan(a\cos\theta/r)$ folded into 0–90°: zero on the equator, largest near the poles. For spin zero the
+boost fraction is zero outside $r=2.5$, the region checked.
+
+---
+
+### 7.6 Ray paths and versor transport (`examples/rays.py`)
+
+`trace_paths` follows rays as `trace_scene` does but records their state every few steps, so that each ray becomes a
+polyline. Where the renderer steps $(x,Z)$ by Runge–Kutta, with $\dot Z=AZ$ and
+$A=-\tfrac12\Omega_{\text{conf}}(\dot x)$, the ray paths keep the camera's twistor $Z_0$ fixed and accumulate the
+transport in a versor,
+
+```math
+Z(\lambda)=U(\lambda)\,Z_0,\qquad \dot U=A\,U,\qquad U\in\mathrm{Spin}(2,4),
+```
+
+stepped on the group by the commutator-free method CF4 (Celledoni, Marthinsen and Owren):
+
+```math
+U_2=e^{\frac h2A_1}U,\quad U_3=e^{\frac h2A_2}U,\quad U_4=e^{\frac h2(2A_3-A_1)}U_2,\quad
+U'=e^{\frac h{12}(-A_1+2A_2+2A_3+3A_4)}\,e^{\frac h{12}(3A_1+2A_2+2A_3-A_4)}\,U,
+```
+
+with $A_i$ the generator at stage $i$ (`versor_rates`) and the event moved by the classical Runge–Kutta stages. Each
+update is a product of exponentials of bivectors, so $U\widetilde U=1$ and $h(Z,Z)$ hold to round-off. The method is
+fourth order and agrees with a fine reference. It keeps the group exactly, while $\omega$ drifts at truncation level,
+because a mixed generator such as $2A_3-A_1$ is not built from the twistor it acts on.
+
+`observables` reads, per record: coordinates and affine parameter; the frame momentum, coordinate velocity, frame
+frequency and redshift relative to the camera; the screen carried by the flag; the drifts of the Killing energy and
+angular momentum; the twistor's coordinates, amplitudes, $h(Z,Z)$, $|\omega|/|\pi|$ and relative phase;
+and $U$'s coefficients, $|U\widetilde U-1|$, the transported basis $Ue_a\widetilde U$ of $\mathbb R^{2,4}$,
+$\mathrm{tr}\,U/4$ on twistor space and $\mathrm{tr}\,(\widetilde U_0U)/4$ against the first ray. `write_paths` writes them as VTKHDF PolyData, drawn in any three of $(t,x,y,z)$.
+
+---
+
+## 8. Export (`hypersurface.py`, `export.py`)
+
+### 8.1 Fields over spacetime, hypersurfaces for display
+
+A field is a function of the coordinates $(t,x,y,z)$, sampled, when sampling is needed, on a `Grid4`. A dataset is a
+hypersurface
+
+```math
+\Sigma_\mu(c):\ x^\mu=c,
+```
+
+for any of the four coordinates, with the other three as its axes: $t=c$ is a spatial snapshot, $x$, $y$ or $z=c$ a
+section through time. Which coordinate is fixed decides the hypersurface; the order of the remaining three (which is
+VTK's $x$, $y$, $z$) only decides how it is laid out. A vector field is shown by its components along the display
+axes, in display order, next to all four (`name_txyz`), so a permutation changes how a vector is drawn but not what it
+is. Components of algebraic objects carry labels that name physical axes and are not permuted.
+
+`export.evaluate_section` evaluates the fields at the hypersurface's own events, which is exact since the fields are
+callables. `export.evaluate_grid` samples a whole 4D grid once and `hypersurface.extract` cuts it: the grid slice on a
+grid line, linear interpolation between grid lines (exact for fields linear along the fixed axis, and assuming nothing
+beyond the samples). A sequence of $t=c$ hypersurfaces is written with a `.series` file, ParaView's time series; any
+other sequence gets a `.sections.json` index and no time metadata. `stem.json`, and a root attribute of each file,
+record the coordinate order, signature $(+,-,-,-)$, units of $M$, the hypersurface, and each field's kind, basis and
+labels.
+
+### 8.2 Fields
+
+`field_function` evaluates, per point: $\tfrac12C^2$ (`weyl2_half`), $\tfrac12C\cdot{}^*C$ (`weyl2_dual_half`, the
+imaginary part of $\mathcal W$), $\tfrac12R_{abcd}R^{abcd}$ (`riem2_half`), $R$, the magnitudes of the four curvature
+sectors of the normal connection, and $e(\partial_t)$ (`shift`), in frame components. With `components`, it also
+evaluates the curvature on the six coordinate planes, $F(\partial_\mu,\partial_\nu)$, and `readout` splits each into
+the generator coefficients of its sectors: `F_M_components` (36), `F_P_components` (24), `F_K_components` (24),
+`F_D_components` (6), labeled `G(μν)`. Fields are evaluated with `jit` in chunks and written as VTKHDF ImageData.
+
+The cases are a boosted Schwarzschild flyby, a boosted Kerr flyby ($a=0.9$, where `weyl2_dual_half` is nonzero) and the
+growing mass. For the boosted Schwarzschild coframe the spatial part of the shift is
+
+```math
+\texttt{shift}^i=\gamma\bigl(\beta^i(y)-v\,\delta^i_x\bigr),\qquad y=Lx,\quad\beta(y)=\sqrt{2M/r_y}\,\hat y :
+```
+
+a uniform $-\gamma v\,\hat x$ far away, an outward part near the hole, and a stagnation point ahead of it where
+$\sqrt{2M/r_y}=v$. It is a gauge-dependent component of the connection; the invariants are the gauge-independent output.
+
+---
+
+## 9. Design choices
+
+**Extensors throughout.** Binding is a call, composition is a call, the adjoint action is `>>`, and contractions are
+`.contract` or `.trace`. Curvature, Bianchi, the spin connection, Ricci, Schouten, the invariants and the twistor
+structure are written without index bookkeeping.
+
+**numga's idiom.** Module-level named types, small named functions, and no `lambda` or `jax.numpy` in the package.
+Positions, steps and loops are batch axes of extensors.
+
+**Fields are callables, not lattices.** Derivatives are exact, the identities hold pointwise, and there is no
+discretization error in the identity tests. Grids appear only at the output: slices, renders and export.
+
+**Where arrays remain.**
+
+- `GEN`, to specify test connections in generator coordinates and for the structure constants;
+- the sixteen-unknown least-squares solve for the normal conditions;
+- the twistor flag and annihilator, which need complex coordinates and an SVD;
 - the carry flags of the ray tracer's `lax.scan`;
-- `permute_inputs`, a small helper for the missing axis permutation of multilinear maps.
+- `permute_inputs`, for the missing axis permutation.
 
-**The ray tracer is the connection.** A ray's momentum is a frame direction $k$ and its position an event $x$:
-$$\dot x=E(k),\qquad \dot k=-\tfrac12[\Omega(\dot x),k]\quad(\texttt{-Omega(xdot).commutator(k)}),$$
-the geodesic equation as parallel transport of $k$ by the Lorentz connection of §6.2 along its own path. The camera
-screen, a map `Direction <- Screen`, is carried by the same commutator, which is what the polarization render reads.
+**An independent oracle.** The first implementation, index-based with `einsum`, is kept in `_array/` with its tests in
+`tests/array_reference/`. The extensor code's curvature, transport, spin connection, Christoffel symbols, Schouten
+tensor and Weyl squared are compared against it, and it builds the Riemann tensor directly from Christoffel symbols.
 
-**Two independent implementations.** The first version was written with raw `einsum` and is retained in
-`_array/`. It is an oracle: curvature, transport, spin connection, Christoffel symbols, Schouten and Weyl² of
-the extensor version are compared against it (agreement 1e-12 or better), and the Riemann tensor is built there
-directly from Christoffel symbols, i.e. independently of the CSTA construction.
+**Numerical hazards found.**
 
-**Fields are callables on points, not lattices.** Differentiation is by autodiff (exact) and the identities are
-pointwise; this avoids discretisation error in every identity test. Grids appear only at the output stage
-(slices, rendering, export).
+- On the GPU, XLA's Triton fusion of float64 dot products returned wrong values when two extensor chains shared
+  subexpressions inside one `jit`. `__init__.py` sets `--xla_gpu_enable_triton_gemm=false` before JAX starts.
+- `jax.jit(jax.vmap(holonomy_loop))` returned wrong values for batches above about 16 on the CPU; the cause was not
+  found, and loops are now evaluated as one extensor batch.
+- numga's `even * scalar` with both operands batched compiles very slowly on the GPU (§7.1); scalars go on the left.
 
 ---
 
-## 11. Verification map
+## 10. Verification map
 
-| Claim | Where | Level |
+| Claim | Test file | Level |
 |---|---|---|
-| $\eta$, null basis, 15 generators, $\mathfrak{so}(2,4)$ closure, Jacobi | `test_algebra.py` | exact |
-| $V\tilde V=1$, `exp` vs an independent matrix exponential | `test_gauge_curvature.py` | 1e-9 |
-| $\Omega'$ stays a bivector; $\mathcal D'\Psi'=V\mathcal D\Psi$ | same | 1e-11 |
-| $[\mathcal D,\mathcal D]\Psi=\tfrac12F\Psi$; Bianchi; flatness of pure gauge | same | 1e-10 |
-| transport is a versor; orders 2 and 4; reparametrisation invariance | `test_transport.py` | 1e-6 … 1e-10 |
-| holonomy $=\exp(-\tfrac12\epsilon^2F)$ | same | $O(\epsilon^3)$ |
-| Lorentz sector closes under Lorentz rotors, leaks under general $\mathrm{Spin}(2,4)$ | `test_lorentz_schwarzschild.py` | 1e-11 / O(0.1) |
-| spin connection, Christoffel, Riemann vs index code; Ricci $=0$; $48M^2/r^6$ | same | 1e-12 … 1e-8 |
-| torsion $=0$; normal $f=$ Schouten; Cotton sector; $I=\tfrac12C^2$ | `test_conformal_cartan.py`, `test_invariants_and_conformal_action.py` | 1e-8 … 1e-16 |
-| generator roles ($2c$ translation, $e^{-2\lambda}$ dilation) | same | 1e-12 |
-| VTKHDF layout; fields of a small flyby grid (vacuum identities) | `test_export.py` (`-m slow`) | read back by `vtkHDFReader` |
-| orientation typing enforced; closed-form frames invert the coframes (six geometries) | `test_types_and_frames.py` | 1e-13 |
-| Kerr: Kerr–Schild form; torsion $=0$, Ricci $=0$, normal $f=0$, $2I=$ Kretschmann; equals numga's Kerr gauge field and rotation gauge field | `test_kerr.py` | 1e-12 … 1e-14 |
-| ray tracer: $k\cdot\partial_t$, $k\cdot\partial_\phi$ conserved; screen orthonormal; redshift vs conserved quantities; unit-intensity coherency | `test_render.py` | 5e-3 (integrator) / 1e-12 |
+| metric, null basis, 15 generators, $\mathfrak{so}(2,4)$ closure, Jacobi | `test_algebra.py` | exact |
+| $V\widetilde V=1$; `exp` against a matrix exponential | `test_gauge_curvature.py` | 1e-9 |
+| $\Omega'$ is a bivector; $\mathcal D'\Psi'=V\mathcal D\Psi$ | same | 1e-11 |
+| $[\mathcal D_a,\mathcal D_b]\Psi=\tfrac12F\Psi$; Bianchi; pure gauge is flat | same | 1e-10 |
+| transport is a versor; orders 2 and 4; reparametrization invariance; holonomy $\exp(-\tfrac12\epsilon^2F)$ | `test_transport.py` | 1e-6 to 1e-10; $O(\epsilon^3)$ |
+| Lorentz sector closed under Lorentz rotors, leaks under $\mathrm{Spin}(2,4)$; spin connection and Riemann against the index code; $48M^2/r^6$ | `test_lorentz_schwarzschild.py` | 1e-8 to 1e-12 |
+| torsion zero; normal $f$ is Schouten; Cotton sector; $I=\tfrac12C^2$; generator roles | `test_conformal_cartan.py`, `test_invariants_and_conformal_action.py` | 1e-8 to 1e-16 |
+| orientation typing; closed-form frames of six geometries | `test_types_and_frames.py` | 1e-13 |
+| Kerr: GTG gauge fields, torsion, Ricci, normal $f=0$, Kretschmann | `test_kerr.py` | 1e-12 to 1e-14 |
+| twistors: ideal, norm, split, translator and incidence, Klein correspondence, rays, transport curvature and holonomy, momentum, flag, Kerr Weyl invariant | `test_twistor.py` | 1e-9 to 1e-14 |
+| ray tracer: conservation, screen, redshift, polarization, incidence, camera screen | `test_render.py` | 5e-3 (integrator), 1e-12 |
+| VTKHDF layout; dual Weyl field; sector components rebuild $F(\partial_\mu,\partial_\nu)$; a fixed-$x$ section equals the fields at its events and the cut 4D grid; polylines | `test_export.py` | read back by VTK; 1e-10 |
+| 4D grid order; extraction on and between grid lines; display permutations; series only for $t=c$ | `test_hypersurface.py` | exact |
+| ray paths: $h(Z,Z)$, $|\omega|/|\pi|$, $U\widetilde U=1$ and $Ue_a\widetilde U$ orthonormal, fourth order against a fine reference | `test_rays.py` | 1e-9 to 1e-12; ratio 16 |
 
 ---
 
-## 12. Open questions and limits
+## 11. Limits and open questions
 
-- **No dynamics.** There are no field equations; "simulation" here means evaluating the kinematic fields on given
-  geometries. The spec itself says the dynamics are open.
-- **Einstein recovery (spec §11.4)** needs more than the Weyl-squared density found here: a compensator, a symmetry
-  breaking mechanism, or constraints. Not attempted.
-- **GTG displacement field (spec §9.2, §11.2).** The translation sector is identified with an orthonormal coframe of a
-  torsion-free metric. That is standard Cartan geometry; whether it is a faithful reading of Doran–Lasenby's
-  $h(a)$ (with its rotor/gauge structure and fiducial flat background) is untested.
-- **Dilation field $b$** is zero throughout. Its role (spec §11.3) is unexplored.
-- **Fundamental versors (spec §11.1).** Only pure-gauge flatness and transport as versors were examined.
-- **Numerical issues found:** on the GPU, XLA's Triton fusion of float64 dots miscompiles `jit`ed code in which two
-  extensor chains share subexpressions (set `--xla_gpu_enable_triton_gemm=false`, done in `__init__.py`); earlier,
-  `jit(vmap)` of the holonomy loop gave wrong values on CPU for batches above about 16 (cause not identified; loops are now one
-  extensor batch). Backward ray tracing in the PG chart must stop at $r\lesssim2.2M$, because a backward ray hugging the
-  horizon continues onto an unphysical branch.
-- **Rendering** covers Schwarzschild and Kerr (a = 0.9) with redshift, Doppler beaming, Page–Thorne colour and
-  polarization; the Schwarzschild shadow radius agrees with the analytic value to 0.2%. Not modelled: light-travel delay,
-  multiple disk crossings, gas aberration of the polarization.
+- **No dynamics.** There are no field equations; the code evaluates the kinematic structure on given geometries, as the
+  proposal leaves the dynamics open.
+- **Einstein gravity (§11.4)** needs more than the Weyl-squared density: a compensator, a symmetry-breaking mechanism
+  or constraints. The infinity twistor, which fixes $n_\infty$ and so the ω/π split, is a candidate for that structure;
+  it is not implemented.
+- **The GTG displacement field (§9.2, §11.2).** The translation sector is identified with an orthonormal coframe of a
+  torsion-free metric. Whether that is a faithful reading of Doran and Lasenby's $h(a)$, with its fiducial flat
+  background, is not tested.
+- **The dilation field (§11.3)** is zero throughout.
+- **Fundamental versors (§11.1).** Only pure-gauge flatness and transport were examined.
+- **Twistors.** No twistor form of the dynamics, no global twistor space (it exists only for conformally flat or
+  half-flat spacetimes), and no two-twistor massive particles.
+- **Rendering.** No light-travel delay, a single disk crossing per ray, and no gas aberration of the polarization.
+  In the Kerr image ($a=0.9$) a few rays grazing the approaching edge of the shadow break the conservation of
+  $k\cdot\partial_t$ and $k\cdot\partial_\phi$ (relative change up to $3\times10^4$, frequency ratio down to 0) while
+  their twistors stay on their rays ($|\omega|/|\pi|<3\times10^{-15}$); they show as a speckle there. The cause is not
+  established; a step too coarse near the horizon is the first suspect.

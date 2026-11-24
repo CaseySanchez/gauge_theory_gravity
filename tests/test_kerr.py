@@ -62,7 +62,7 @@ def numga_kerr():
 
 
 def _sta_reader(K):
-    """Coordinates of an STA direction in numga's Kerr example: each read by its basis vector, normalised on its axis."""
+    """Coordinates of an STA direction in numga's Kerr example: each read by its basis vector, normalized on its axis."""
     mv = K.mv
     axes = [K.time, mv.x.dual(), mv.y.dual(), mv.z.dual()]
     vectors = [mv.t, mv.x, mv.y, mv.z]

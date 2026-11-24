@@ -39,7 +39,7 @@ def test_convergence_order():
     assert err(10, "magnus4") / err(20, "magnus4") > 12          # ~16: fourth order
 
 
-def test_reparametrisation_invariance():
+def test_reparametrization_invariance():
     Om = fl.random_connection_field(4, 0.4)
     a, b = X0, X0 + jnp.array([0.4, 0.3, -0.2, 0.5])
     lin = tp.transport(Om, straight(a, b), 300, scheme="magnus4")

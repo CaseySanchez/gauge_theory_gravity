@@ -1,7 +1,7 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (168 tests, ~21 min on the GPU, plus one slow test: `pytest -m slow tests/test_export.py`). Demos:
-`cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy lensing kerr]` (figures in `output/`; lensing and kerr take about an hour each at 480×360 on an RTX 3060).
+All checks below are executable: `source .venv/bin/activate && pytest` (190 tests, ~24 min on the GPU, plus three slow tests: `pytest -m slow tests/test_export.py tests/test_rays.py`). Demos:
+`cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about an hour each at 480×360 on an RTX 3060).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
 ## Implementation: extensors, with an independent array reference
@@ -83,12 +83,12 @@ Derived (not stated in spec) and now pinned numerically:
 * Holonomy around the rectangle x0 → +μ → +ν → −μ → −ν of side ε: **T = exp(−½ ε² F_μν) + O(ε³)**.
   Same sign in three planes tested (μν = 01, 12, 03).
 * Magnus-4 transport is 4th order; midpoint is 2nd order; 4th-order finite-difference stencil gives ~16× error drop per halving.
-* Conformal action of versors on embedded points X = n_o + x − ½x² n_∞ (null cone preserved):
+* Conformal action of versors on embedded points X = T_x n_o T̃_x, T_x = exp(½ x∧n_∞) (null cone preserved):
   * V = exp(c P_a): x → x + 2c e_a (translation, n_∞ fixed). So P_a really are translations.
   * V = exp(λ D): x → e^{−2λ} x (dilation).
   * V = exp(c K_a): fixes n_o, maps null cone to itself (special conformal).
   * V = exp(c M_ab): preserves x² (Lorentz).
-  This confirms the spec's generator labelling (P ↔ e_a∧n_∞, K ↔ e_a∧n_o).
+  This confirms the spec's generator labeling (P ↔ e_a∧n_∞, K ↔ e_a∧n_o).
 
 ## Lorentz sector (spec 9.1)
 
@@ -103,7 +103,7 @@ Derived (not stated in spec) and now pinned numerically:
 
 * **Translation sector = coframe.** Put e^a_μ in the P coordinates, Levi-Civita ω in the M sector: F_P = 0 (torsion-free) for Schwarzschild, FRW and a generic static-lapse metric.
 * **Normal conditions** (F_P = 0, F_D = 0, F_M trace-free) are always solvable pointwise for the K coefficients f (16 unknowns, rank 16), and the solution is
-  **f^a_μ = P^a_μ, the Schouten tensor** ½(Ric − R g/6), exactly (ratio 1.0000000000000002 in both non-vacuum test spacetimes) in this normalisation. For Ricci-flat spacetimes f = 0.
+  **f^a_μ = P^a_μ, the Schouten tensor** ½(Ric − R g/6), exactly (ratio 1.0000000000000002 in both non-vacuum test spacetimes) in this normalization. For Ricci-flat spacetimes f = 0.
 * With the normal f: F_M = trace-free (Weyl-type) part, F_K = Cotton-type: zero for FRW (conformally flat), nonzero for the lapse metric, zero in vacuum.
 * **Quadratic action density.** g^{μρ}g^{νσ}⟨F_μν F̃_ρσ⟩₀ of the full 15-component F equals **½ C_{abcd}C^{abcd}** (Weyl-squared) to 1e-9 for the three spacetimes; for the Lorentz-only connection it does not (it also sees Ricci). This confirms spec section 10's remark that a quadratic curvature action gives Weyl-squared gravity, at the level of the Lagrangian density.
 
@@ -136,7 +136,8 @@ and `Psi P` picks one. All of the following hold to 1e-11 or better:
   adapted basis `h = 2 Re(conj(omega) . pi)`.
 * Split `omega = 1/2 n_inf n_o Z`, `pi = 1/2 n_o n_inf Z`: the null kernels of infinity and the origin, each h-null.
 * Versors act as SU(2,2) matrices (unit determinant, h preserved); bivectors as traceless h-antihermitian matrices.
-* Incidence: the conformal point X of an event (checked to be the translated origin) annihilates a complex 2-plane of T,
+* Incidence: the conformal point X = T_x n_o T̃_x of an event (null, unit weight, reads back x; T_x = exp(½ x∧n_∞) is
+  a versor whose series stops at the linear term) annihilates a complex 2-plane of T, the twistors `T_x pi_0`, i.e.
   `omega = 1/2 x n_inf pi`; in coordinates `omega = -(i/sqrt 2) x^{AA'} pi` with `x^{AA'}` Hermitian and `det = x^2`.
   The alpha-planes of two events meet in a complex line when the events are null separated and only in 0 otherwise.
 * Light rays: the real six-vectors annihilating a null twistor form a 2-plane; none annihilate a non-null one. `ray(Z)`
@@ -182,19 +183,19 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). Not checked: GTG's gauge freedom in
   h (other gauges, e.g. the Doran PG gauge with its own rotation field), and GTG's field equations themselves.
 * **Dilation gauge field b** was set to zero everywhere in Tier B; its dynamics/gauge-fixing was not explored (spec 11.3).
-* **Fields are callables on points, not 4D lattices** (deviation from Phase 3 option 1). This was enough for every identity and costs nothing in accuracy; lattice demos can be added later.
+* **Fields are callables on points.** Identities are checked pointwise; 4D lattices appear only for export (`hypersurface.Grid4`), sampled from the callables.
 * **Fundamental versor fields (spec 11.1)** not explored beyond pure-gauge flatness.
 * Phase 6's Lorentz-sector equivalence is kinematic: it verifies that F in the sector is the Riemann bivector map; no GTG dynamical equations were involved.
 
 ## Findings about the spec
 
 * All formulas stated in sections 4-8 are mutually consistent as written (checked numerically, including all factors of ½).
-* The only convention that needed pinning down was the holonomy orientation sign above, and the normalisation of P (translation by 2c per unit coefficient) and D (scale e^{−2λ}), both due to the ½ in the spin-representation sandwich.
+* The only convention that needed pinning down was the holonomy orientation sign above, and the normalization of P (translation by 2c per unit coefficient) and D (scale e^{−2λ}), both due to the ½ in the spin-representation sandwich.
 
 ## Renderings (`src/gauge_theory_gravity/examples/render.py`, figures `output/render_*`)
 
 * **Field-strength slice** (`render_slices.png`): the gauge-invariant `<F F~>` on a plane through the hole, agrees with 24M²/r⁶ to 1e-11 down to r≈0.4; it diverges toward the singularity, with the horizon (r=2M) unremarkable in PG coordinates. The translation-sector shift √(2M/r) is shown as a gauge-dependent comparison.
-* **Holonomy map** (`render_holonomy.png`): max |T_loop − 1| for 0.4×0.4 loops of the full conformal connection (coframe + Lorentz), ≈ ε²·curvature, from 1e-4 at r=8 to O(1) at the centre.
+* **Holonomy map** (`render_holonomy.png`): max |T_loop − 1| for 0.4×0.4 loops of the full conformal connection (coframe + Lorentz), ≈ ε²·curvature, from 1e-4 at r=8 to O(1) at the center.
 * **Ray tracer** (`trace_scene`): a ray's frame momentum k and the camera screen (a map `Direction <- Screen`) are
   parallel transported by the Lorentz connection, `-Omega(E(k)).commutator(.)`, RK4 with steps 0.03·clip(r, 1, 10)
   backward in the affine parameter, pixels in chunks of 16384 through one compiled `lax.scan`. Rays go on past the disk
@@ -205,19 +206,20 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   `d_t + Omega d_phi`, from the innermost stable orbit (Bardeen-Press-Teukolsky) to 14 M; frequency ratio
   observed/emitted `1/(k | u_gas)` with `k | u_camera = 1`, which carries gravitational redshift and Doppler shift;
   Page-Thorne temperature (matches numga's to all digits at a = 0.8; peaks at 9.55 M for a = 0) times that ratio,
-  shown as tone-mapped blackbody colour over a star field. Polarization: numga's model, emission polarized across a
+  shown as tone-mapped blackbody color over a star field. Polarization: numga's model, emission polarized across a
   toroidal field in the local frame (gas aberration left out), as a unit-intensity coherency `Screen <- ScreenSlice` on
   the transported screen, read by a rotating analyzer slice.
-* **Schwarzschild** (`render_lensing.png`, `.gif`; 480×360, camera at r = 50 M, 20° above the disk, field 0.7 rad):
+* **Schwarzschild** (`render_schwarzschild.png`, `.gif`; 480×360, camera at r = 50 M, 20° above the disk, field 1.0 rad):
   shadow angular radius 0.1018 rad against the analytic 0.1020 (static observer, sin α = (3√3 M/D)√(1−2M/D)), 0.2% low
   (it was 0.1670 vs 0.1681 at r = 30, 160×120). Frequency ratio on the disk 0.49–1.35, observed temperature up to
-  4580 K. The image was traced before the Hermite crossing: photon energy k·∂t and angular momentum k·∂φ change by at most
-  2.1e-3 from camera to disk there (the straight-line crossing), invisible in the image. The GIF shades the same trace
+  4580 K. Photon energy k·∂t and angular momentum k·∂φ change by at most 1.1e-6 from camera to disk; at the disk
+  |ω|/|π| < 3e-15. The GIF shades the same trace
   with a two-armed pattern riding the Kepler flow (no light-travel delay).
-* **Kerr a = 0.9** (`render_kerr.png`, `render_polarizer.gif`; 480×360, 15° above the disk): D-shaped shadow flattened
-  on the approaching side, disk down to 2.32 M, frequency ratio 0.18–1.41, observed temperature up to 11141 K;
-  k·∂t and k·∂φ conserved from camera to disk to 4.6e-4 (Hermite crossing; 2.4e-2 with the straight line at
-  320×240). Polarizer: crossed analyzers pass 1 to 1e-12; one analyzer 0.10–0.90; per disk pixel the brightest over
+* **Kerr a = 0.9** (`render_kerr.png`, `.gif`; 480×360, 15° above the disk): D-shaped shadow flattened
+  on the approaching side, disk down to 2.32 M, frequency ratio up to 1.41, observed temperature up to 11137 K,
+  |ω|/|π| < 3e-15 at the disk. **Defect:** a few rays grazing the approaching edge of the shadow break conservation
+  (k·∂t and k·∂φ change by up to 2.8e4, frequency ratio down to 0.000), visible as a speckle there; an earlier render
+  conserved them to 4.6e-4. Cause not established. Polarizer: crossed analyzers pass 1 to 1e-12; one analyzer 0.10–0.90; per disk pixel the brightest over
   darkest frame is 1.6 (median) to 3.7 (90th percentile), a band sweeping round the disk. Its exposure is dimmer
   (factor 0.6 instead of 2) to keep that swing out of the tone curve's roll-off.
 * **Tests** (`tests/test_render.py`, 12×9 scenes): conservation (< 5e-3), screen orthonormal and across the ray
@@ -226,12 +228,48 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
 * Not done: light-travel delay in the animation; multiple disk crossings (the disk is opaque, nearest crossing only);
   gas aberration in the polarization; the Schwarzschild image re-traced with the Hermite crossing.
 
-## ParaView export of spacetime slices (`src/gauge_theory_gravity/export.py`)
+## ParaView export: hypersurfaces of spacetime (`hypersurface.py`, `export.py`)
 
-Implemented, **not run**: the simulation itself (evaluating the fields on a 3D grid for each time step) has not been executed.
-* Format: VTKHDF ImageData, one `.vtkhdf` file per time step plus a `<stem>.vtkhdf.series` JSON that ParaView reads as a time series. Needs `h5py` (writer) and, for the tests, `vtk`.
-* Verified: the writer's layout, by reading files back with VTK's own `vtkHDFReader` (point ordering for scalars, 3-vectors and `uint8`, dimensions, origin and spacing), `tests/test_export.py`. ParaView itself was not opened.
-* Written but not executed: the field evaluator and the slow test `-m slow` on a 3×3×3 grid (`pytest -m slow tests/test_export.py`).
-* Geometries: `flyby` (Schwarzschild boosted to v=0.6, a vacuum solution; its Weyl²/2 is the boosted r⁻⁶ profile, Cotton and Ricci vanish) and `growing_mass` (PG form with M(t) from 1 to 2, a toy with matter, so the Cotton sector switches on while the mass changes).
-* Fields per step: ½C² (normal connection), ½Riem² (Lorentz-only), R, magnitudes of the sectors M/P/K/D of the normal connection's curvature, the translation-sector shift vector, log10 versions of the invariants, and a validity mask.
-* Cost, from a timing of 4000 points on CPU with `jit(vmap)`: about 0.65 ms/point, i.e. about 70 s per frame at n = 48 (110k points), about 20 min for 16 frames. Run: `PYTHONPATH=src python -m gauge_theory_gravity.export flyby --n 48 --frames 16`.
+* **Model.** Fields are functions of (t, x, y, z) (order, signature (+,−,−,−) and units M recorded in every file). A
+  dataset is a hypersurface x^μ = c for any one of the four coordinates, laid out along any order of the other three:
+  t = c is a spatial snapshot, x, y or z = c a section over time and two spatial axes. Fields are evaluated at the
+  hypersurface's own events, or sampled once on a 4D grid (`evaluate_grid`) and cut from it (`hypersurface.extract`:
+  the grid slice on a grid line, linear interpolation between grid lines).
+* **Files.** VTKHDF ImageData per hypersurface, the display axes as VTK's x, y, z; a `.vtkhdf.series` only when every
+  hypersurface is t = c (a time series), else a `.sections.json` index; `stem.json` and a root attribute of each file
+  record the coordinate conventions, the hypersurface and, per field, its kind, basis and labels.
+* **Fields.** ½C² (normal connection), ½C·*C, ½Riem² (Lorentz-only), R, the sector magnitudes M/P/K/D, the
+  translation-sector vector e(d_t) (`shift`: its frame components along the display axes, so on t = c the old spatial
+  shift; `shift_txyz`: all four), log10 versions of the invariants, a validity mask; with `--components`, each sector's
+  generator coefficients of F(d_μ, d_ν) on the six coordinate planes (36 + 24 + 24 + 6 components), labeled `G(μν)`.
+* **Verified** (`tests/test_hypersurface.py`, `tests/test_export.py`): grid ordering, spacing and metadata;
+  extraction on grid lines equals the grid slice for each of the four axes; between grid lines it reproduces linear
+  fields exactly; display permutations move points and the shown vector components together while the four-component
+  array is unchanged; VTK's reader places every point at the coordinates stored for it, also for a permuted (z, t, y)
+  section; the sector components rebuild each sector of F(d_μ, d_ν) and, summed, F itself (Kerr, 1e-10); a section at
+  fixed x of the Schwarzschild flyby equals the fields evaluated at its events and the same section cut from a sampled
+  4D grid (slow test). ParaView itself was not opened.
+* Cost, from a timing of 4000 points on CPU with `jit(vmap)`: about 0.65 ms/point, i.e. about 70 s per section at
+  n = 48 (110k points); a whole 48⁴ grid (`--via-grid`) is 48 times that. Run:
+  `PYTHONPATH=src python -m gauge_theory_gravity.export flyby --n 48 --frames 16 [--fixed x --order tyz]`.
+  The full-size exports have not been run.
+
+## Ray paths, twistor states and versor transport (`examples/rays.py`, `tests/test_rays.py`)
+
+* **Export.** Rays from the static camera, recorded every few steps, as VTKHDF PolyData polylines drawn in any three
+  of (t, x, y, z); point data: coordinates, affine parameter, frame momentum, coordinate velocity, frame frequency
+  and redshift relative to the camera, the screen carried by the twistor's flag, drifts of k·∂_t and k·∂_φ, k·k, the
+  twistor's coordinates, amplitudes, h(Z, Z), h(Z, Z)/|Z|², |ω|/|π|, arg(π₁ π̄₀), and the
+  versor's coefficients, |UŨ − 1|, the transported basis U e_a Ũ of R^{2,4}, tr U / 4 and tr(Ũ₀U)/4 against the first
+  ray.
+* **Versor transport.** The state is (x, U) with Z = U Z₀ and U in Spin(2,4), stepped by the commutator-free Lie
+  group method CF4 (exponentials of so(2,4) bivectors, numga's `exp`, which matches a matrix exponential to 4e-16), the
+  event by the classical Runge–Kutta stages. It is the only transport `rays.py` offers (the renderer keeps its additive
+  Runge–Kutta step for (x, Z)).
+* **Verified** (Schwarzschild, five rays from r = 30, fixed steps 0.2): h(Z, Z)/|Z|² < 1e-12 and k null; the versor
+  stays in the group (|UŨ − 1| < 1e-10, U e_a Ũ orthonormal to 1e-10), starts at the identity, carries the camera
+  twistor exactly at the first record, and agrees with a run at half the step to 7e-11. Against steps of 0.025 it
+  converges at fourth order (error ratio 16.0 per halving, slow test). ω drifts at truncation level (8e-11 at step 0.2,
+  falling as h⁴), because CF4's mixed generators, such as 2A₃ − A₁, are not built from the twistor they act on; over
+  200 fixed steps of 0.2 from r = 30 it reached 4e-4.
+* The trace compiles in about 50 s on the GPU (five exponentials per step).

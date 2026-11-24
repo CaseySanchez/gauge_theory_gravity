@@ -30,10 +30,9 @@ def test_plain_lorentz_sector_density_is_not_weyl_squared_when_ricci_nonzero():
 # ---------- conformal embedding and generator roles ----------
 
 def point(x):
-    """The conformal point of an event, X = o + x - 1/2 x^2 inf, built from intrinsic points: the origin, the event's
-    direction and the point at infinity (null for n_o . n_inf = +1)."""
-    x = np.asarray(x, float)
-    return al.ORIGIN + al.point(x) - 0.5 * float(x @ al.ETA4 @ x) * al.INFINITY
+    """The conformal point of an event as an intrinsic point: the origin carried to the event by its translator,
+    T_x n_o ~T_x, dualized."""
+    return al.conformal_point(al.point(np.asarray(x, float))).dual()
 
 
 def read_point(X):

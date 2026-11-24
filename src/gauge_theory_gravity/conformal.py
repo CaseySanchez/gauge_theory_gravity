@@ -41,7 +41,7 @@ def connection(coframe: Coframe, special: Field | None = None, dilation: Field |
 def ricci_vector(strength: Extensor, frame: Extensor) -> Extensor:
     """Ric(nu) = sum_a e^a _| F_M(E_a, nu): the trace of the Lorentz-sector curvature over its first coordinate
     input and one frame index, a map Direction <- Direction (= R^b_nu, frame index up).  On a direction c the
-    bivector acts by its commutator, `c _| B` dualised being `-B.commutator(c)`; the frame input a and c are then
+    bivector acts by its commutator, `c _| B` dualized being `-B.commutator(c)`; the frame input a and c are then
     contracted with the metric."""
     lorentz = al.sector(strength, "M")
     return (-lorentz(frame, Direction).commutator(Direction)).contract(1, 3).cast(Direction)

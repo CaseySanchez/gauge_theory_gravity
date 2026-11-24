@@ -15,7 +15,8 @@ The rest of the structure, all of it in the algebra:
   * the twistor norm  h(Z1, Z2) = 4 <~Z1 Z2>_{0,6},  a complex number (scalar + I part), Hermitian, signature (2,2);
   * the split  Z = omega + pi  into the null kernels of the point at infinity and the origin,
     omega = 1/2 n_inf n_o Z  (n_inf omega = 0),  pi = 1/2 n_o n_inf Z  (n_o pi = 0);
-  * incidence with an event x, its conformal point X = n_o + x - 1/2 x^2 n_inf:  X Z = 0, equivalently
+  * incidence with an event x, its conformal point X = T_x n_o ~T_x (the origin carried there by its translator
+    T_x = exp(1/2 x ^ n_inf)):  X Z = 0, equivalently ~T_x Z has no omega half, i.e. Z = T_x pi_0, i.e.
     omega = 1/2 x n_inf pi, the index-free form of Penrose's omega = i x pi (in the coordinates of BASIS,
     omega^A = -(i / sqrt 2) x^{AA'} pi_A' with x^{AA'} a Hermitian 2x2 matrix of determinant x^2);
   * the real vectors V with V Z = 0: a totally null 2-plane, the light ray of Z, when h(Z, Z) = 0, else none.
@@ -157,22 +158,17 @@ def as_vector(event: Extensor) -> Extensor:
     return event.dual_inverse()
 
 
-def conformal_point(event: Extensor) -> Extensor:
-    """X = n_o + x - 1/2 x^2 n_inf, the null vector of an event: the origin translated to x."""
-    vector = as_vector(event)
-    return n_o + vector - 0.5 * vector.squared() * n_inf
-
-
 def incidence(event: Extensor, twistor_: Extensor) -> Extensor:
-    """X Z, an odd multivector that vanishes exactly when the twistor's alpha-plane contains the event."""
-    return conformal_point(event) * twistor_
+    """X Z with X = T_x n_o ~T_x, an odd multivector that vanishes exactly when the twistor's alpha-plane contains the
+    event: X Z = T_x n_o (~T_x Z) is zero when the twistor, translated back by ~T_x, has no omega half."""
+    return al.conformal_point(event) * twistor_
 
 
 def through(event: Extensor, momentum: Extensor) -> Extensor:
-    """The twistor incident with `event` whose pi half is `momentum`: omega = 1/2 x n_inf pi. Over the momenta it
-    sweeps the event's alpha-plane, a complex 2-plane of T."""
-    momentum = pi(momentum)
-    return (momentum + 0.5 * (as_vector(event) * n_inf) * momentum).cast(Twistor)
+    """The twistor incident with `event` whose pi half is `momentum`: the twistor of the parallel ray through the
+    origin, pi, translated to the event, T_x pi (so omega = 1/2 x n_inf pi). Over the momenta it sweeps the event's
+    alpha-plane, a complex 2-plane of T."""
+    return (al.translator(event) * pi(momentum)).cast(Twistor)
 
 
 def annihilator(twistor_: Extensor, tolerance: float = 1e-9) -> np.ndarray:
@@ -186,7 +182,7 @@ def annihilator(twistor_: Extensor, tolerance: float = 1e-9) -> np.ndarray:
 
 def ray(twistor_: Extensor) -> tuple[Extensor, Extensor]:
     """An event on the light ray of a null twistor and the ray's null direction, as intrinsic directions.
-    The annihilator plane holds the conformal points X of the ray's events, normalised by X . n_inf = 1,
+    The annihilator plane holds the conformal points X of the ray's events, normalized by X . n_inf = 1,
     and its one vector orthogonal to n_inf, the ray's direction. Undefined for pi = 0, the ray at infinity."""
     plane = al.mv.vector(al.CTX.xp.asarray(annihilator(twistor_)))     # [2] Vector+
     towards = np.asarray((plane | n_inf).kernel)[..., 0]                # X . n_inf of each spanning vector

@@ -35,7 +35,7 @@ def test_normal_conditions_solvable_and_f_is_proportional_to_schouten(name):
     else:
         ratio = (f * S).sum() / (S * S).sum()
         assert np.abs(f - ratio * S).max() < 1e-8
-        assert abs(ratio - 1.0) < 1e-8          # f^a_mu = Schouten P^a_mu exactly, in this normalisation
+        assert abs(ratio - 1.0) < 1e-8          # f^a_mu = Schouten P^a_mu exactly, in this normalization
 
 
 def test_schouten_proportionality_constant_is_universal():

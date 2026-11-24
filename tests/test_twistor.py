@@ -72,11 +72,14 @@ def test_omega_and_pi_are_the_null_kernels_of_infinity_and_the_origin():
 
 
 def test_conformal_point_is_the_translated_origin():
-    vector = tw.as_vector(EVENT)
-    translator = 1 + 0.5 * vector * al.n_inf
-    X_ = tw.conformal_point(EVENT)
-    assert np.abs(nz(translator * al.n_o * ~translator - X_)).max() < 1e-14
-    assert abs(al.scalar(X_ | X_)) < 1e-14
+    """X = T_x n_o ~T_x is null, has unit weight X . n_inf = 1, reads back the event's coordinates, and T_x is a
+    versor whose exponential series stops at its linear term."""
+    X_ = al.conformal_point(EVENT)
+    translator = al.translator(EVENT)
+    assert abs(al.scalar(X_ | X_)) < 1e-14 and abs(al.scalar(X_ | al.n_inf) - 1) < 1e-14
+    assert np.abs(al.coordinates(X_.dual()) - al.coordinates(EVENT)).max() < 1e-14
+    assert np.abs(nz(translator * ~translator - 1)).max() < 1e-14
+    assert np.abs(nz(translator - (1 + 0.5 * tw.as_vector(EVENT) * al.n_inf))).max() < 1e-14
 
 
 def test_incidence_alpha_planes_and_the_klein_correspondence():

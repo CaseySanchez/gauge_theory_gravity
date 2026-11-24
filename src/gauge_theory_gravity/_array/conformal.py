@@ -51,7 +51,7 @@ def lorentz_full(cM):
 
 
 def normal_residual(coframe, x, f):
-    """Residual of the normal conditions for a constant-in-the-neighbourhood f (4,4): F_D (6 comps)
+    """Residual of the normal conditions for a constant-in-the-neighborhood f (4,4): F_D (6 comps)
     and the trace T^b_nu = F^{ab}_{mu nu} E_a^mu (16 comps). Affine in f."""
     Om = connection(coframe, lambda _x: f)
     F = curvature(Om)(x)
