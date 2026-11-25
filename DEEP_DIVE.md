@@ -664,7 +664,6 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 - **Twistors.** No twistor form of the dynamics, no global twistor space (it exists only for conformally flat or
   half-flat spacetimes), and no two-twistor massive particles.
 - **Rendering.** No light-travel delay, a single disk crossing per ray, and no gas aberration of the polarization.
-  In the Kerr image ($a=0.9$) a few rays grazing the approaching edge of the shadow break the conservation of
-  $k\cdot\partial_t$ and $k\cdot\partial_\phi$ (relative change up to $3\times10^4$, frequency ratio down to 0) while
-  their twistors stay on their rays ($|\omega|/|\pi|<3\times10^{-15}$); they show as a speckle there. The cause is not
-  established; a step too coarse near the horizon is the first suspect.
+  Rays are stopped at $r<1.1\,r_+$ and their final steps there are not converged: a step that ends captured may
+  cross $z=0$ far from where the cubic through its ends puts it, so such a step is never counted as a disk crossing
+  (it once put six captured Kerr rays on the disk, with $k\cdot\partial_t$ changed by up to $3\times10^4$).

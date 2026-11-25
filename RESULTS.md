@@ -217,9 +217,13 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   with a two-armed pattern riding the Kepler flow (no light-travel delay).
 * **Kerr a = 0.9** (`render_kerr.png`, `.gif`; 480×360, 15° above the disk): D-shaped shadow flattened
   on the approaching side, disk down to 2.32 M, frequency ratio up to 1.41, observed temperature up to 11137 K,
-  |ω|/|π| < 3e-15 at the disk. **Defect:** a few rays grazing the approaching edge of the shadow break conservation
-  (k·∂t and k·∂φ change by up to 2.8e4, frequency ratio down to 0.000), visible as a speckle there; an earlier render
-  conserved them to 4.6e-4. Cause not established. Polarizer: crossed analyzers pass 1 to 1e-12; one analyzer 0.10–0.90; per disk pixel the brightest over
+  |ω|/|π| < 2.4e-15 at the disk, k·∂t and k·∂φ conserved camera to disk to 2.6e-4, frequency ratio 0.185–1.409.
+  **Fixed defect:** six captured rays on the receding edge of the shadow were shaded as disk, with k·∂t and k·∂φ
+  changed by up to 2.8e4 and frequency ratio 0.000 (a red speckle). Each reached just above the capture radius
+  (r 1.58–1.60 against 1.1 r₊ = 1.579), and its last step landed inside the horizon (r 0.63–1.01) across z = 0;
+  the cubic Hermite crossing of that step put the crossing at r 4–12, on the disk. A crossing now counts only if the
+  step ends outside the capture radius. Re-traced with `rays.py` under both transports, at the render's step and
+  half of it, none of the six crosses the disk: the transport played no part. Polarizer: crossed analyzers pass 1 to 1e-12; one analyzer 0.10–0.90; per disk pixel the brightest over
   darkest frame is 1.6 (median) to 3.7 (90th percentile), a band sweeping round the disk. Its exposure is dimmer
   (factor 0.6 instead of 2) to keep that swing out of the tone curve's roll-off.
 * **Tests** (`tests/test_render.py`, 12×9 scenes): conservation (< 5e-3), screen orthonormal and across the ray

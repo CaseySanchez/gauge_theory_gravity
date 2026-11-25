@@ -35,8 +35,8 @@ field equations: the proposal leaves the dynamics open, and so does the code.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
-  polarization. The Schwarzschild shadow radius agrees with the analytic value to 0.2%; in the Kerr image a few rays grazing the
-  shadow's approaching edge fail to conserve energy and angular momentum (undiagnosed). The renderer's transport is
+  polarization. The Schwarzschild shadow radius agrees with the analytic value to 0.2%; in the Kerr image energy and
+  angular momentum are conserved from camera to disk to $3\times10^{-4}$. The renderer's transport is
   intrinsic: it steps the twistor itself. The exported ray paths offer that and the extrinsic transport, which
   accumulates a versor, $Z=UZ_0$ with $U\in\mathrm{Spin}(2,4)$ stepped on the group at fourth order, keeping
   $U\widetilde U=1$.

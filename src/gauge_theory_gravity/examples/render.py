@@ -390,9 +390,12 @@ def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: fl
         height, new_height = cartan.coordinate(state[0], 3), cartan.coordinate(moved[0], 3)
         at_plane = plane_crossing(state, moved, rate, moved_rate, size)
         radius_there = hole.radius(at_plane[0])
-        on_disk = (height * new_height < 0) & alive & ~hit & (radius_there > r_in) & (radius_there < r_out)
-        crossing = tuple(where(on_disk, new, old) for new, old in zip(at_plane, crossing))
         new_radius = hole.radius(moved[0])
+        # A step that ends captured is not a disk crossing: the last step of a ray grazing the capture radius can land
+        # deep inside the horizon across z = 0, and the cubic through its ends then puts the crossing on the disk.
+        on_disk = ((height * new_height < 0) & alive & ~hit & (radius_there > r_in) & (radius_there < r_out)
+                   & (new_radius > capture))
+        crossing = tuple(where(on_disk, new, old) for new, old in zip(at_plane, crossing))
         alive = alive & (new_radius > capture) & (new_radius < 120.0)
         state = tuple(where(alive, new, old) for new, old in zip(moved, state))
         rate = tuple(where(alive, new, old) for new, old in zip(moved_rate, rate))
