@@ -661,7 +661,10 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
   $I\cdot I=-R/12$ at $\sigma=1$. The Weyl-invariant action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$, varied in the
   coframe and $\sigma$ (`variation.py`), gives exactly Einstein's equations with $\Lambda=-6c$ in the gauge
   $\sigma=1$, and the $\sigma$ equation is the trace of the coframe equation. This recovers general relativity in
-  second-order form; a first-order form varying the full connection is not done.
+  second-order form. In first-order form (`first_order.py`), with the origin $n_o$ and the infinity twistor $n_\infty$
+  as compensators, the action $\langle F\,DX\,DX\,X\,I\rangle+\beta\langle DI\,DI\,DX\,DX\,X\,I\rangle+
+  \gamma\langle (DX)^4X\,I\rangle$ varied in the full connection gives Einstein's equations with
+  $\Lambda=6(\gamma-1/\beta)$, and at $\gamma=0$ its solutions are the normal connections of Einstein metrics.
 - **The GTG displacement field (§9.2, §11.2).** The translation sector is identified with an orthonormal coframe of a
   torsion-free metric. Whether that is a faithful reading of Doran and Lasenby's $h(a)$, with its fiducial flat
   background, is not tested in general. For Schwarzschild, GTG's two gauge freedoms (a displacement and a rotation)

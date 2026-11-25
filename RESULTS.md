@@ -258,9 +258,35 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   proposal wants it; the MacDowell-Mansouri form (phase 3B); writing the action in terms of the full connection
   Omega and varying Omega independently (first-order form); matter.
 
+## First-order form: the full connection varied on its own (plan for 11.4; `first_order.py`, `tests/test_first_order.py`)
+
+* Two compensators, the origin X = n_o and the infinity twistor I = n_inf (null, X . I = 1), break Spin(2,4) to the
+  Lorentz group. The coframe is DX = Omega x n_o (equal to the translation sector to 1e-15) and DI = Omega x n_inf is
+  the special-conformal field (equal to it to 1e-15). The action is S1 + beta S2 + gamma S3 with
+  S1 = <F^DX^DX^X^I>, S2 = <DI^DI^DX^DX^X^I>, S3 = <DX^DX^DX^DX^X^I>, a conformal Stelle-West form, varied in all 60
+  components of Omega with the Euler operator of `variation` at first order (13-30 s per point on the CPU).
+* The solutions were found by fitting, not assumed: on Schwarzschild and de Sitter, along the trial family
+  (Levi-Civita, e, f = k e, b = 0), each term's equations are polynomials in k, and the residual vanishes to 1e-14
+  exactly on beta = 1/k, gamma = k (Schwarzschild) and gamma = k + H^2/2 (de Sitter, H = 0.5). So f = e/beta and
+  Lambda = 6 (gamma - 1/beta), with Lambda = 3 H^2 for de Sitter.
+* Checked: Schwarzschild and Kerr a = 0.9 solve all 60 equations at beta = 4, gamma = 1/4 (1e-13); de Sitter solves
+  at beta = 2, gamma = 1/2 + H^2/2; Schwarzschild with the wrong gamma does not (> 0.1); a constant contorsion added to
+  the Lorentz sector does not (> 1e-2); the static lapse has no solution for any k, beta, gamma (smallest residual
+  over k in [-4, 4] above 1e-2; f is algebraic, so this family is the only candidate).
+* **Normal connection.** With gamma = 0 (no explicit cosmological term) the solution is exactly the normal conformal
+  connection: de Sitter's Schouten tensor is -(Lambda/6) e in this sign of R, and Omega = Omega_normal solves at
+  beta = -6/Lambda to 1e-13. The cosmological constant then comes from the coupling of the special-conformal field.
+  The Ricci-flat normal connection is the limit beta -> infinity.
+* **Dilation field.** b drops out of the action: Schwarzschild still solves with a b that has curl. The dilation
+  sector carries no dynamics here, as 11.3 found it to be gauge.
+* For 11.4: Einstein's equations with Lambda follow from varying the full CSTA connection alone, once the infinity
+  twistor and the origin are fixed. The origin breaks translations explicitly, and both compensators are fixed
+  rather than dynamical; making them dynamical fields, and the physical meaning of the sign and size of beta, are
+  not examined.
+
 ## Not done / not established (be careful when citing)
 
-* **Einstein recovery only in second-order form.** The compensator action sqrt(g) sigma^-4 (I . I + c) gives Einstein's equations with Lambda (section above), but as an action of the coframe and the scale, with the connection the normal one; a first-order form varying the full CSTA connection, the MacDowell-Mansouri form, matter couplings and any Weyl^2 admixture were not attempted. Spec 11.4 is answered for this action only.
+* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the compensator action) and in first-order form (the full connection varied, sections above), but with the compensators fixed (the scale, or X = n_o and I = n_inf); their own dynamics, the MacDowell-Mansouri form, matter couplings and any Weyl^2 admixture were not attempted.
 * **Displacement gauge field of GTG.** For Kerr-Schild Kerr (and so Schwarzschild at a = 0) the CSTA's translation and
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was

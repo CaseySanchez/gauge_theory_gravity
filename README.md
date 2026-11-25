@@ -52,6 +52,11 @@ pointwise and checks known solutions against them.
   $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$ gives, in the gauge $\sigma=1$, exactly Einstein's equations with
   $\Lambda=-6c$; the scale's own equation is the trace of the coframe equation. Schwarzschild, Kerr, de Sitter and a
   Weyl-rescaled Schwarzschild with its scale solve them.
+- **Einstein gravity (11.4), first-order form:** with the origin and the infinity twistor as compensators, varying
+  the full CSTA connection alone in $\langle F\wedge DX\wedge DX\wedge X\wedge I\rangle+\beta\langle DI\wedge DI\wedge
+  DX\wedge DX\wedge X\wedge I\rangle+\gamma\langle (DX)^4\wedge X\wedge I\rangle$ gives a torsion-free Lorentz sector,
+  an algebraic special-conformal field and Einstein's equations with $\Lambda=6(\gamma-1/\beta)$; with $\gamma=0$ the
+  solutions are exactly the normal conformal connections of Einstein metrics. The dilation field drops out.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
@@ -65,8 +70,8 @@ pointwise and checks known solutions against them.
   curvature's generator components on request. Ray paths go out as polylines carrying the twistor's state and the
   accumulated versor.
 
-Not established: Einstein gravity in first-order form, with the full CSTA connection varied independently (11.4;
-it is recovered in second-order form), a dilation field that is not pure gauge (11.3), and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim with
+Not established: dynamics for the compensators themselves (11.4 is recovered with them fixed, in second- and
+first-order form), a dilation field that is not pure gauge (11.3), and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim with
 its test and tolerance; [DEEP_DIVE.md](DEEP_DIVE.md) explains the construction.
 
 | Schwarzschild | Kerr, $a=0.9$ |
@@ -87,7 +92,7 @@ numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's
 ```sh
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
-pytest                                 # 233 tests; 190 of them took about 24 min on an RTX 3060
+pytest                                 # 242 tests; 233 of them took about 38 min on an RTX 3060
 pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py   # grids; transport; Bach; Einstein
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
@@ -111,6 +116,7 @@ returned wrong values on the GPU (see RESULTS.md).
 | `conformal.py`, `invariants.py`, `sta_embedding.py` | the full conformal connection, normal conditions, Schouten, Weyl squared, the Lorentz sector |
 | `compensator.py` | the scale tractor (infinity twistor) of a scale, its tractor derivative, the integrability test for an Einstein scale |
 | `variation.py` | field equations: the pointwise Euler–Lagrange derivative of a coframe density; Einstein–Hilbert and Weyl-squared densities |
+| `first_order.py` | the first-order action of the full connection with origin and infinity twistor as compensators, and its field equations |
 | `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, SU(2,2) matrices, the complex Weyl invariant |
 | `hypersurface.py` | fields on a 4D coordinate grid, hypersurfaces $x^\mu=c$, their layout and extraction |
 | `export.py` | VTKHDF export of hypersurfaces for ParaView: invariants, sector magnitudes and components |
