@@ -66,9 +66,9 @@ def _monomial(step: Extensor, alpha: tuple[int, ...]) -> jax.Array:
     return _number(value) / float(np.prod([math.factorial(alpha.count(m)) for m in set(alpha)]))
 
 
-def _euler(perturbed: Callable, shape: tuple[int, ...], x4) -> np.ndarray:
-    """The Euler operator of order 2 from `perturbed(alpha, x, amplitude)`: the density at x with the field moved by
-    amplitude * (y - x)^alpha / alpha!, amplitude an array of the field's shape."""
+def _euler(perturbed: Callable, shape: tuple[int, ...], x4, order: int = 2) -> np.ndarray:
+    """The Euler operator of order 1 or 2 from `perturbed(alpha, x, amplitude)`: the density at x with the field moved
+    by amplitude * (y - x)^alpha / alpha!, amplitude an array of the field's shape."""
     def coefficient(alpha):
         def at(x4):
             x = al.point(x4)
@@ -79,7 +79,7 @@ def _euler(perturbed: Callable, shape: tuple[int, ...], x4) -> np.ndarray:
     total = coefficient(())(x4)
     for m in range(4):
         total = total - jax.jacfwd(coefficient((m,)))(x4)[..., m]
-    for m in range(4):
+    for m in range(4 if order >= 2 else 0):
         for n in range(m, 4):
             total = total + jax.hessian(coefficient((m, n)))(x4)[..., m, n]
     return np.asarray(total)
