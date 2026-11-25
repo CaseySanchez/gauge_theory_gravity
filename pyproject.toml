@@ -1,3 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gauge-theory-gravity"
+version = "0.1.0"
+description = "Gauge Theory Gravity in the real conformal spacetime algebra Cl(2,4): a numerical test-bed on numga and JAX"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Casey Sanchez" }]
+requires-python = ">=3.11"
+dependencies = [
+    # numga is pinned to the commit this code was tested against.
+    "numga[linalg,jax] @ git+https://github.com/EelcoHoogendoorn/numga@8b22fde9",
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "jax>=0.5",
+    "h5py>=3.10",
+]
+
+[project.optional-dependencies]
+# Figures and renders (examples.scenarios, examples.render).
+render = [
+    "matplotlib>=3.8",
+    "pillow>=10",
+]
+# Reading exports back in tests; numga's examples package for the Kerr cross-check.
+test = [
+    "gauge-theory-gravity[render]",
+    "numga[examples,test] @ git+https://github.com/EelcoHoogendoorn/numga@8b22fde9",
+    "pytest>=7",
+    "vtk>=9.3",
+]
+# NVIDIA GPU backend for JAX.
+cuda = ["jax[cuda12]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
