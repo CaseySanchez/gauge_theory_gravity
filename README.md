@@ -36,9 +36,10 @@ field equations: the proposal leaves the dynamics open, and so does the code.
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
   polarization. The Schwarzschild shadow radius agrees with the analytic value to 0.2%; in the Kerr image a few rays grazing the
-  shadow's approaching edge fail to conserve energy and angular momentum (undiagnosed). The exported ray paths
-  accumulate the transport in a versor, $Z=UZ_0$ with $U\in\mathrm{Spin}(2,4)$ stepped on the group at fourth order,
-  keeping $U\widetilde U=1$.
+  shadow's approaching edge fail to conserve energy and angular momentum (undiagnosed). The renderer's transport is
+  intrinsic: it steps the twistor itself. The exported ray paths offer that and the extrinsic transport, which
+  accumulates a versor, $Z=UZ_0$ with $U\in\mathrm{Spin}(2,4)$ stepped on the group at fourth order, keeping
+  $U\widetilde U=1$.
 - **Visualization:** fields are functions on spacetime, and any hypersurface $x^\mu=c$ (a spatial snapshot at fixed
   $t$, or a section through time at fixed $x$, $y$ or $z$) is exported to ParaView in any layout of its axes, with the
   curvature's generator components on request. Ray paths go out as polylines carrying the twistor's state and the
@@ -91,7 +92,7 @@ returned wrong values on the GPU (see RESULTS.md).
 | `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, SU(2,2) matrices, the complex Weyl invariant |
 | `hypersurface.py` | fields on a 4D coordinate grid, hypersurfaces $x^\mu=c$, their layout and extraction |
 | `export.py` | VTKHDF export of hypersurfaces for ParaView: invariants, sector magnitudes and components |
-| `examples/` | scenarios, renders, disk light, ray paths with versor transport (`rays.py`) |
+| `examples/` | scenarios, renders, disk light, ray paths with extrinsic (versor) or intrinsic (twistor) transport (`rays.py`) |
 | `_array/`, `tests/array_reference/` | the first, index-based implementation, kept as an independent oracle |
 | `tests/` | the checks listed in RESULTS.md |
 

@@ -3,11 +3,22 @@
     PYTHONPATH=src python -m gauge_theory_gravity.examples.rays --hole schwarzschild --nx 15 --ny 3
 
 A ray is followed as in `render` (backward from a static camera), but its state is recorded every `every` steps, so
-that each ray becomes a polyline through spacetime. The twistor is carried by a versor: the state is (x, U) with
-Z = U Z0, the camera's twistor Z0 fixed and U in Spin(2,4) accumulating the transport, dU/dlambda = A U with
-A = -1/2 Omega(dx/dlambda), stepped on the group by the fourth-order commutator-free Lie group method CF4 (Celledoni,
-Marthinsen and Owren 2003): every update is a product of exponentials of so(2,4) bivectors, so U stays a versor
-(U ~U = 1) and h(Z, Z) is kept by construction, up to round-off. The event x moves by the classical Runge-Kutta stages.
+that each ray becomes a polyline through spacetime. Two transports of the twistor are offered (`--transport`), the
+same equation dZ/dlambda = A Z with A = -1/2 Omega(dx/dlambda), integrated on either side of the carrier/carried split:
+
+  extrinsic   (default) the transport itself is the state: (x, U) with Z = U Z0, the camera's twistor Z0 fixed and
+              U in Spin(2,4) accumulating the transport, dU/dlambda = A U, stepped on the group by the fourth-order
+              commutator-free Lie group method CF4 (Celledoni, Marthinsen and Owren 2003). Every update is a product of
+              exponentials of so(2,4) bivectors, so U stays a versor (U ~U = 1) and h(Z, Z) is kept by construction,
+              up to round-off; omega drifts at truncation level, since CF4's mixed generators (2 A3 - A1) are not built
+              from the twistor they act on.
+  intrinsic   the carried twistor is the state: (x, Z), advanced additively by the classical Runge-Kutta step,
+              Z' = Z + h/6 (k1 + 2 k2 + 2 k3 + k4), as `render` does. No versor is formed; each stage's generator is
+              built from the twistor it acts on, so the twistor stays incident with the ray (omega = 0) to round-off.
+              The step is not unitary, so h(Z, Z) is not kept by construction, but with omega = 0 it is
+              2 Re(conj(omega) . pi) = 0 and stays null with it.
+
+In both the event x moves by the classical Runge-Kutta stages.
 
 Each recorded point carries (point data):
   coordinates     x^mu, (t, x, y, z); the polyline's own points are three of them, the display axes
@@ -21,6 +32,7 @@ Each recorded point carries (point data):
   omega_re/_im, pi_re/_im   the twistor's coordinates in `twistor.BASIS`;  amplitude  |omega^0|, |omega^1|, |pi_0|, |pi_1|
   twistor_norm    h(Z, Z);  nullity  h(Z, Z) / |Z|^2;  incidence  |omega| / |pi| (zero while Z passes through x)
   relative_phase  arg(pi_1 conj pi_0), with phase_defined 0 where either amplitude is below 1e-9 of |pi|
+Extrinsic transport only:
   versor          the 32 coefficients of U;  versor_residual  |U ~U - 1|
   frame_t ... frame_n   the transported basis vectors U e_a ~U of R^{2,4}, six components each
   transport_trace       tr(U) / 4 on twistor space (real, imaginary): 1 for the identity, a conjugation invariant
@@ -46,7 +58,10 @@ State = tuple[Extensor, Extensor]
 OUT = Path(__file__).resolve().parents[3] / "export" / "rays"
 
 
-# --- the versor transport ------------------------------------------------------------------------
+TRANSPORTS = ("extrinsic", "intrinsic")
+
+
+# --- the extrinsic transport: the versor ---------------------------------------------------------
 def versor_rates(hole: R.Hole, initial: Extensor, position: Extensor, versor: Extensor) -> State:
     """The coordinate velocity and the generator A = -1/2 Omega(velocity) of the versor, for Z = U Z0."""
     twistor = (versor * initial).cast(tw.Twistor)
@@ -71,20 +86,32 @@ def commutator_free(rates: Callable[..., State], state: State, size: Extensor, f
     return moved.cast(Direction), (late * early * versor).cast(tw.Twistor)
 
 
+# --- the intrinsic transport: the twistor ----------------------------------------------------------
+# `render.rates` gives (dx/dlambda, A Z) for the state (x, Z) and `render.runge_kutta` steps it additively.
+
+
 # --- recording paths -----------------------------------------------------------------------------
 def trace_paths(hole: R.Hole, start: State, records: int, every: int, base_step: float = 0.03,
-                adaptive: bool = True) -> dict:
+                adaptive: bool = True, transport: str = "extrinsic") -> dict:
     """Backward-trace rays from `start` (events and twistors), recording the state `records` times, every `every`
     steps, after the starting record. The step is -base_step times the radius clipped to [1, 10] (as in `render`) or,
     with `adaptive=False`, -base_step throughout. A ray stops (and repeats its last state) once it is captured
-    (r < 1.1 r_+) or escapes (r > 120 M). Returns the camera twistors and, per record (leading axis, records + 1),
-    the events, the versors, the affine parameter and whether the ray was still moving."""
+    (r < 1.1 r_+) or escapes (r > 120 M). `transport` is 'extrinsic' (the versor U, Z = U Z0) or 'intrinsic' (the
+    twistor Z itself). Returns the transport, the camera twistors and, per record (leading axis, records + 1), the
+    events, the twistors, the versors (extrinsic only), the affine parameter and whether the ray was still moving."""
     import jax
 
     capture = 1.1 * hole.horizon
     events, initial = start
     count = len(np.asarray(events.kernel))
-    move = partial(versor_rates, hole, initial)
+    if transport == "extrinsic":
+        move, advance = partial(versor_rates, hole, initial), commutator_free
+        carried = (0 * initial + 1).cast(tw.Twistor)                                    # U = 1 at the camera
+    elif transport == "intrinsic":
+        move, advance = partial(R.rates, hole), R.runge_kutta
+        carried = initial                                                               # Z = Z0 at the camera
+    else:
+        raise ValueError(transport)
 
     def size_of(position: Extensor) -> Extensor:
         if adaptive:
@@ -94,7 +121,7 @@ def trace_paths(hole: R.Hole, start: State, records: int, every: int, base_step:
     def step(carry, _):
         state, rate, alive, parameter = carry
         size = size_of(state[0])
-        moved = commutator_free(move, state, size, rate)
+        moved = advance(move, state, size, rate)
         moved_rate = move(*moved)
         radius = hole.radius(moved[0])
         still = alive & (radius > capture) & (radius < 120.0)
@@ -111,20 +138,26 @@ def trace_paths(hole: R.Hole, start: State, records: int, every: int, base_step:
     def run(carry):
         return jax.lax.scan(record, carry, None, length=records)[1]
 
-    state = (events, (0 * initial + 1).cast(tw.Twistor))
+    state = (events, carried)
     carry = (state, move(*state), np.ones(count, dtype=bool), 0 * hole.radius(events))
     states, _, alive, parameter = run(carry)
-    return dict(count=count, initial=initial,
+    carried = concatenate([state[1][None], states[1]])
+    if transport == "extrinsic":
+        versors, twistors = carried, (carried * initial[None]).cast(tw.Twistor)
+    else:
+        versors, twistors = None, carried
+    return dict(count=count, initial=initial, transport=transport,
                 events=concatenate([state[0][None], states[0]]),
-                versors=concatenate([state[1][None], states[1]]),
+                twistors=twistors, versors=versors,
                 alive=np.concatenate([np.ones((1, count), dtype=bool), np.asarray(alive)]),
                 parameter=np.concatenate([np.asarray(carry[3].kernel)[None, :, 0],
                                           np.asarray(parameter.kernel)[..., 0]]))
 
 
 def twistors_of(paths: dict) -> Extensor:
-    """The twistor at every record, Z = U Z0, [records, rays]."""
-    return (paths["versors"] * paths["initial"][None]).cast(tw.Twistor)
+    """The twistor at every record, [records, rays]: Z = U Z0 for the extrinsic transport, the state itself for the
+    intrinsic one."""
+    return paths["twistors"]
 
 
 # --- observables ---------------------------------------------------------------------------------
@@ -151,7 +184,8 @@ def observables(hole: R.Hole, paths: dict) -> dict[str, np.ndarray]:
     out["angular_momentum_drift"] = (angular - np.tile(angular[:rays], records)) / reference
     out["null_residual"] = np.einsum("na,ab,nb->n", out["momentum"], al.ETA4, out["momentum"])
     out |= twistor_observables(flat_twistors)
-    out |= versor_observables(paths["versors"])
+    if paths["versors"] is not None:
+        out |= versor_observables(paths["versors"])
     return {name: value.reshape(records, rays, *value.shape[1:]) for name, value in out.items()}
 
 
@@ -210,7 +244,7 @@ def write_paths(path: Path, hole: R.Hole, paths: dict, display: tuple[str, str, 
     cell_data = {"pixel": np.arange(rays), "escaped": escaped.astype(np.uint8),
                  "captured": (~paths["alive"][-1] & ~escaped).astype(np.uint8)}
     metadata = hs.coordinate_metadata() | dict(
-        hole=hole.name, mass=hole.mass, spin=hole.spin, transport="versor", display_axes=list(display),
+        hole=hole.name, mass=hole.mass, spin=hole.spin, transport=paths["transport"], display_axes=list(display),
         momentum_basis="frame", velocity_basis="coordinate", screen_basis="frame",
         twistor_basis="twistor.BASIS: omega^0, omega^1, pi_0, pi_1")
     export.write_vtkhdf_polydata(path, points, lines, point_data, cell_data, metadata)
@@ -234,6 +268,8 @@ def main(argv=None):
     ap.add_argument("--inclination", type=float, default=20.0, help="degrees above the disk plane")
     ap.add_argument("--records", type=int, default=300)
     ap.add_argument("--every", type=int, default=6, help="steps between records")
+    ap.add_argument("--transport", choices=TRANSPORTS, default="extrinsic",
+                    help="extrinsic: the versor U, Z = U Z0, on the group; intrinsic: the twistor Z, additive RK4")
     ap.add_argument("--display", default="xyz", help="the three coordinates the polylines are drawn in, e.g. txz")
     ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args(argv)
@@ -241,8 +277,8 @@ def main(argv=None):
     start = camera_rays(hole, a.nx, a.ny, a.distance, a.fov, np.radians(a.inclination))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    paths = trace_paths(hole, start, a.records, a.every)
-    path = out / f"rays_{a.hole}.vtkhdf"
+    paths = trace_paths(hole, start, a.records, a.every, transport=a.transport)
+    path = out / f"rays_{a.hole}_{a.transport}.vtkhdf"
     write_paths(path, hole, paths, tuple(a.display))
     print("wrote", path)
 

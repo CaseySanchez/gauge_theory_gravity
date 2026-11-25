@@ -1,5 +1,5 @@
-"""Ray paths with their twistors and the accumulated versor: the invariants the versor transport keeps, its
-convergence to a fine reference, and the PolyData file."""
+"""Ray paths with their twistors, under the extrinsic transport (the accumulated versor) and the intrinsic one (the
+twistor itself): the invariants each keeps, their agreement, convergence to a fine reference, and the PolyData file."""
 import numpy as np
 import pytest
 
@@ -22,6 +22,11 @@ def paths():
 @pytest.fixture(scope="module")
 def observed(paths):
     return rays.observables(HOLE, paths)
+
+
+@pytest.fixture(scope="module")
+def intrinsic():
+    return rays.trace_paths(HOLE, start(), 6, 10, base_step=0.2, adaptive=False, transport="intrinsic")
 
 
 def test_records_and_affine_parameter(observed):
@@ -57,6 +62,26 @@ def test_versor_transport_carries_the_camera_twistor(paths):
     fine = rays.twistors_of(rays.trace_paths(HOLE, start(), 6, 20, base_step=0.1, adaptive=False))
     later = np.abs(tw.coordinates(twistors[-1]) - tw.coordinates(fine[-1])).max()
     assert later < 1e-8 * np.abs(tw.coordinates(fine[-1])).max()
+
+
+def test_intrinsic_transport_keeps_the_twistor_on_the_ray_and_forms_no_versor(intrinsic):
+    """The additive step builds each stage's generator from the twistor it moves, so omega stays zero to round-off,
+    and with it h(Z, Z) = 2 Re(conj(omega) . pi), though the step is not unitary."""
+    o = rays.observables(HOLE, intrinsic)
+    assert intrinsic["versors"] is None and "versor" not in o and "versor_residual" not in o
+    assert np.abs(tw.coordinates(intrinsic["twistors"][0]) - tw.coordinates(start()[1])).max() < 1e-15
+    assert o["incidence"].max() < 1e-12
+    assert np.abs(o["nullity"]).max() < 1e-12
+    assert np.abs(o["energy_drift"]).max() < 1e-6 and np.abs(o["angular_momentum_drift"]).max() < 1e-6
+
+
+def test_intrinsic_and_extrinsic_transports_agree(paths, intrinsic):
+    """The two integrate one equation, dZ = A Z: the events and twistors agree to truncation error."""
+    assert paths["transport"] == "extrinsic" and intrinsic["transport"] == "intrinsic"
+    events = np.abs(al.coordinates(paths["events"][-1]) - al.coordinates(intrinsic["events"][-1])).max()
+    extrinsic_twistor = tw.coordinates(rays.twistors_of(paths)[-1])
+    relative = np.abs(tw.coordinates(rays.twistors_of(intrinsic)[-1]) - extrinsic_twistor).max()
+    assert events < 1e-8 and relative < 1e-8 * np.abs(extrinsic_twistor).max()
 
 
 def test_paths_file(tmp_path, paths):

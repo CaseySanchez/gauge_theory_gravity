@@ -254,18 +254,21 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   `PYTHONPATH=src python -m gauge_theory_gravity.export flyby --n 48 --frames 16 [--fixed x --order tyz]`.
   The full-size exports have not been run.
 
-## Ray paths, twistor states and versor transport (`examples/rays.py`, `tests/test_rays.py`)
+## Ray paths, twistor states, extrinsic and intrinsic transport (`examples/rays.py`, `tests/test_rays.py`)
 
 * **Export.** Rays from the static camera, recorded every few steps, as VTKHDF PolyData polylines drawn in any three
   of (t, x, y, z); point data: coordinates, affine parameter, frame momentum, coordinate velocity, frame frequency
   and redshift relative to the camera, the screen carried by the twistor's flag, drifts of k·∂_t and k·∂_φ, k·k, the
   twistor's coordinates, amplitudes, h(Z, Z), h(Z, Z)/|Z|², |ω|/|π|, arg(π₁ π̄₀), and the
   versor's coefficients, |UŨ − 1|, the transported basis U e_a Ũ of R^{2,4}, tr U / 4 and tr(Ũ₀U)/4 against the first
-  ray.
-* **Versor transport.** The state is (x, U) with Z = U Z₀ and U in Spin(2,4), stepped by the commutator-free Lie
+  ray (extrinsic transport only). Files are named `rays_<hole>_<transport>.vtkhdf`.
+* **Extrinsic (versor) transport**, the default (`--transport extrinsic`). The state is (x, U) with Z = U Z₀ and U in Spin(2,4), stepped by the commutator-free Lie
   group method CF4 (exponentials of so(2,4) bivectors, numga's `exp`, which matches a matrix exponential to 4e-16), the
-  event by the classical Runge–Kutta stages. It is the only transport `rays.py` offers (the renderer keeps its additive
-  Runge–Kutta step for (x, Z)).
+  event by the classical Runge–Kutta stages.
+* **Intrinsic (twistor) transport** (`--transport intrinsic`): the state is (x, Z), stepped additively by the
+  renderer's Runge–Kutta step, which is the renderer's transport. No versor is formed. Same rays: |ω|/|π| < 1e-15 and
+  h(Z, Z)/|Z|² < 1e-15 (ω = 0 forces h = 2 Re(ω̄·π) = 0), Killing drifts 3e-11, as for the extrinsic transport; the
+  two agree on the events and twistors within 1e-8 after 60 steps of 0.2.
 * **Verified** (Schwarzschild, five rays from r = 30, fixed steps 0.2): h(Z, Z)/|Z|² < 1e-12 and k null; the versor
   stays in the group (|UŨ − 1| < 1e-10, U e_a Ũ orthonormal to 1e-10), starts at the identity, carries the camera
   twistor exactly at the first record, and agrees with a run at half the step to 7e-11. Against steps of 0.025 it

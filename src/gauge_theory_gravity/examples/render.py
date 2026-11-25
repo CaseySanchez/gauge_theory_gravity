@@ -10,8 +10,10 @@ the Schouten part is zero in these vacuum holes),
 
     dx/dlambda = E(k),        dZ/dlambda = -1/2 Omega(dx/dlambda) Z,        k = momentum(Z) = pi conj(pi),
 
-Penrose's local twistor transport, which keeps the twistor incident with the ray (omega = 0); its Lorentz part turns pi
-as parallel transport would, so the frame momentum `k` follows the geodesic equation in the frame, and stays exactly
+Penrose's local twistor transport, which keeps the twistor incident with the ray (omega = 0).  The transport here is
+the intrinsic one: the carried twistor Z is itself the state, stepped additively by RK4 (`runge_kutta`), with no
+versor formed; `rays` also offers the extrinsic one, the carrier U in Spin(2,4) stepped on the group, Z = U Z0.
+The connection's Lorentz part turns pi as parallel transport would, so the frame momentum `k` follows the geodesic equation in the frame, and stays exactly
 null.  The phase of pi turns its null flag about `k`: the camera sets each flag along the screen's x, and the screen, a
 map from screen directions to frame directions, is read back from the flag wherever it is needed, as the parallel
 transported screen of numga's Kerr example (up to multiples of `k`).  At the disk the gas orbits on prograde Kepler
@@ -229,7 +231,7 @@ def kerr_hole(mass: float = M, spin: float = 0.9) -> Hole:
 
 # --- ray tracing ---------------------------------------------------------------------------------
 def rates(hole: Hole, position: Extensor, twistor: Extensor) -> State:
-    """The rates of a ray: the coordinate velocity is the twistor's momentum carried out of the frame, `E(k)`, and the
+    """The rates of a ray under the intrinsic transport, state (x, Z): the coordinate velocity is the twistor's momentum carried out of the frame, `E(k)`, and the
     twistor moves by the normal conformal connection, `-1/2 Omega(velocity) Z`: the Lorentz connection along the
     velocity, which turns pi (its momentum and flag) as parallel transport would, plus the translation part, the
     coframe's image of the velocity, `e(E(k)) = k`, as the bivector `k ^ n_inf`, which keeps omega = 0."""
@@ -239,7 +241,8 @@ def rates(hole: Hole, position: Extensor, twistor: Extensor) -> State:
 
 def generator(hole: Hole, position: Extensor, twistor: Extensor) -> tuple[Extensor, Extensor]:
     """The coordinate velocity `E(k)` of a ray and the normal conformal connection along it, `Omega(velocity)`, the
-    bivector of so(2,4) whose -1/2 multiple moves the twistor (`rates`) or the accumulated versor (`rays`)."""
+    bivector of so(2,4) whose -1/2 multiple moves the twistor (`rates`, the intrinsic transport) or the accumulated
+    versor (`rays.versor_rates`, the extrinsic transport)."""
     momentum = tw.momentum(twistor)                                                     # [...] Direction-
     velocity = hole.geometry.frame(position)(momentum).cast(Direction)                  # [...] Direction-
     turning = hole.lorentz(position)(velocity)                                          # [...] Bivector+
@@ -248,7 +251,8 @@ def generator(hole: Hole, position: Extensor, twistor: Extensor) -> tuple[Extens
 
 
 def runge_kutta(rates: Callable[..., State], state: State, size: Extensor, first: State | None = None) -> State:
-    """One fourth-order step of a state, a tuple of extensors, along its rates; each keeps its own type. `first`, the
+    """One fourth-order step of a state, a tuple of extensors, along its rates; each keeps its own type. Additive,
+    the step of the intrinsic transport. `first`, the
     rates at the start, may be passed in when already known (the previous step's end)."""
     # The step size multiplies from the left: numga contracts a right-hand scalar with the product table first, which
     # for an even multivector (the twistor) builds a batch of 32 x 32 matrices that XLA's GPU compiler takes tens of

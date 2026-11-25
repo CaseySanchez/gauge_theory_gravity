@@ -516,12 +516,13 @@ boost fraction is zero outside $r=2.5$, the region checked.
 
 ---
 
-### 7.6 Ray paths and versor transport (`examples/rays.py`)
+### 7.6 Ray paths, extrinsic and intrinsic transport (`examples/rays.py`)
 
 `trace_paths` follows rays as `trace_scene` does but records their state every few steps, so that each ray becomes a
-polyline. Where the renderer steps $(x,Z)$ by Runge–Kutta, with $\dot Z=AZ$ and
-$A=-\tfrac12\Omega_{\text{conf}}(\dot x)$, the ray paths keep the camera's twistor $Z_0$ fixed and accumulate the
-transport in a versor,
+polyline. It offers two transports of the one equation $\dot Z=AZ$, $A=-\tfrac12\Omega_{\text{conf}}(\dot x)$.
+The *intrinsic* transport steps the carried twistor itself, $(x,Z)$ by additive Runge–Kutta, as the renderer does;
+each stage's generator is built from the twistor it moves, so $\omega=0$, and with it $h(Z,Z)$, hold to round-off.
+The *extrinsic* transport, the default, keeps the camera's twistor $Z_0$ fixed and accumulates the carrier, a versor,
 
 ```math
 Z(\lambda)=U(\lambda)\,Z_0,\qquad \dot U=A\,U,\qquad U\in\mathrm{Spin}(2,4),
@@ -542,7 +543,7 @@ because a mixed generator such as $2A_3-A_1$ is not built from the twistor it ac
 `observables` reads, per record: coordinates and affine parameter; the frame momentum, coordinate velocity, frame
 frequency and redshift relative to the camera; the screen carried by the flag; the drifts of the Killing energy and
 angular momentum; the twistor's coordinates, amplitudes, $h(Z,Z)$, $|\omega|/|\pi|$ and relative phase;
-and $U$'s coefficients, $|U\widetilde U-1|$, the transported basis $Ue_a\widetilde U$ of $\mathbb R^{2,4}$,
+and, for the extrinsic transport, $U$'s coefficients, $|U\widetilde U-1|$, the transported basis $Ue_a\widetilde U$ of $\mathbb R^{2,4}$,
 $\mathrm{tr}\,U/4$ on twistor space and $\mathrm{tr}\,(\widetilde U_0U)/4$ against the first ray. `write_paths` writes them as VTKHDF PolyData, drawn in any three of $(t,x,y,z)$.
 
 ---
