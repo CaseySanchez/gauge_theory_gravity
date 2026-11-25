@@ -54,6 +54,21 @@ def test_norm_is_hermitian_with_signature_two_two():
     assert abs(tw.norm(tw.from_coordinates(values)) - 2 * np.real(np.conj(values[:2]) @ values[2:])) < 1e-13
 
 
+def test_dual_twistor_pairing_is_metric_free_and_the_norm_is_its_conjugate_form():
+    """W Z, with W in the right ideal, is invariant under any invertible even V (here exp(I B), not a rotor:
+    ~V V = V^2), while h needs ~V V = 1; and h(Z1, Z2) is the pairing of the dual twistor ~Z1 with Z2."""
+    first, second = tw.from_coordinates(random_coordinates()), tw.from_coordinates(random_coordinates())
+    dual = tw.conjugate(tw.from_coordinates(random_coordinates()))
+    assert np.abs(nz(tw.IDEMPOTENT * dual - dual)).max() < 1e-14                  # dual twistors: P W = W
+    assert abs(tw.as_complex(tw.inner(first, second)) - tw.as_complex(tw.pairing(tw.conjugate(first), second))) < 1e-14
+    generator = tw.PSEUDOSCALAR * fields.polynomial(al.Bivector, seed=3)(EVENT)
+    forward, backward = generator.exp(), (-generator).exp()
+    pairing = tw.as_complex(tw.pairing(dual, second))
+    assert abs(tw.as_complex(tw.pairing(dual * backward, forward * second)) - pairing) < 1e-12
+    norm = tw.as_complex(tw.inner(first, second))
+    assert abs(tw.as_complex(tw.inner(forward * first, forward * second)) - norm) > 1e-3
+
+
 def test_spin_2_4_acts_as_su_2_2():
     versor = fields.random_versor_field(seed=2)(EVENT)
     M = tw.matrix(versor)

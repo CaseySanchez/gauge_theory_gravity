@@ -109,9 +109,14 @@ ConnectionType = ALG.gatype((Bivector, Direction))             # Bivector+ <- Di
 CurvatureType = ALG.gatype((Bivector, Direction, Direction))   # Bivector+ <- (Direction-, Direction-)
 
 # The coordinate directions d_t, d_x, d_y, d_z, and the coordinate slices that read them,
-# `SLICES[mu] & DIRECTIONS[nu] = delta`: the slice of a coordinate is its basis vector raised with the metric.
+# `SLICES[mu] & DIRECTIONS[nu] = delta`.  The pairing has no metric in it; `dual` is numga's right-Hodge complement,
+# whose sign carries the negative-metric factors, so each slice is its basis vector normalized against its direction
+# by the pairing itself (t, -x, -y, -z in this signature).
 DIRECTIONS = stack([t.dual(), x.dual(), y.dual(), z.dual()])   # [4] Direction-
-SLICES = stack([t, -x, -y, -z])                                # [4] Slice+
+SLICES = stack([e / scalar(e & d) for e, d in zip(SPACETIME, [t.dual(), x.dual(), y.dual(), z.dual()])])  # [4] Slice+
+# The flat metric as a duality map from directions to the slices that measure them, eta(v) & w = eta_{mu nu} v^mu w^nu:
+# the metric enters here explicitly rather than through the pairing.
+FLAT_METRIC = (SLICES * np.diag(ETA4) * (SLICES & Direction)).sum(axis=0)   # Slice+ <- Direction-
 time = t.dual()                                                # [] Direction-, squares to +1
 # The conformal origin and the point at infinity as intrinsic points.
 ORIGIN = n_o.dual()                                            # [] Antivector-

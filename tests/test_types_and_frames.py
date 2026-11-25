@@ -40,6 +40,29 @@ def test_conformal_generators_from_joins_with_origin_and_infinity():
         assert np.abs(al._kernel((d & al.ORIGIN).dual()) - al._kernel(v ^ al.n_o)).max() < 1e-15
 
 
+def test_slices_are_metric_free_duals_and_the_flat_metric_is_explicit():
+    """The slices are fixed by the pairing alone (they come out as t, -x, -y, -z), and eta enters only through the
+    duality map FLAT_METRIC, whose form eta(d_mu) & d_nu is the metric and which equals its own adjugate."""
+    for k, (sign, vector) in enumerate(zip([1, -1, -1, -1], al.SPACETIME)):
+        assert np.abs(np.asarray((al.SLICES[k] - sign * vector).kernel)).max() == 0
+    assert al.FLAT_METRIC.gatype.orientation.name == "extrinsic"
+    assert np.abs(al.components(al.FLAT_METRIC & al.Direction)[0] - al.ETA4).max() == 0
+    assert np.abs(np.asarray((al.FLAT_METRIC - al.FLAT_METRIC.adjugate()).kernel)).max() == 0
+
+
+@pytest.mark.parametrize("name", GEOMETRIES)
+def test_metric_is_the_flat_duality_map_pulled_back_by_the_adjugate(name):
+    """c & e(v) == e^adj(c) & v for any slice c, with no metric or inverse; g = e^adj eta e is symmetric as a duality
+    map, g == g^adj, and its form g(v) & w is the metric e | e."""
+    geometry, x = GEOMETRIES[name]
+    e = geometry(x)
+    reader, v = 0.4 * al.SLICES[0] - 1.3 * al.SLICES[2] + 0.7 * al.SLICES[3], al.point([0.2, -0.5, 1.1, 0.3])
+    assert abs(al.scalar(reader & e(v)) - al.scalar(e.adjugate()(reader) & v)) < 1e-13
+    g = cartan.metric_map(geometry)(x)
+    assert np.abs(np.asarray((g - g.adjugate()).kernel)).max() < 1e-13
+    assert np.abs(al.components(cartan.metric(geometry)(x))[0] - al.components(e | e)[0]).max() < 1e-13
+
+
 @pytest.mark.parametrize("name", GEOMETRIES)
 def test_closed_form_frame_inverts_the_coframe(name):
     geometry, x = GEOMETRIES[name]

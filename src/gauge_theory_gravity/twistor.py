@@ -12,7 +12,10 @@ connection (`conformal.connection(coframe, conformal.schouten(coframe))`) that a
 transport.
 
 The rest of the structure, all of it in the algebra:
-  * the twistor norm  h(Z1, Z2) = 4 <~Z1 Z2>_{0,6},  a complex number (scalar + I part), Hermitian, signature (2,2);
+  * dual twistors as the right ideal  P Even,  paired with twistors by  W Z in P Even P,  the complex line of P,
+    with no metric;
+  * the twistor norm  h(Z1, Z2) = 4 <~Z1 Z2>_{0,6},  a complex number (scalar + I part), Hermitian, signature (2,2):
+    the pairing composed with the antilinear duality map  Z -> ~Z  onto the dual twistors;
   * the split  Z = omega + pi  into the null kernels of the point at infinity and the origin,
     omega = 1/2 n_inf n_o Z  (n_inf omega = 0),  pi = 1/2 n_o n_inf Z  (n_o pi = 0);
   * incidence with an event x, its conformal point X = T_x n_o ~T_x (the origin carried there by its translator
@@ -64,11 +67,24 @@ def twistor(spinor: Extensor) -> Extensor:
     return (spinor * IDEMPOTENT).cast(Twistor)
 
 
+def pairing(dual: Extensor, twistor_: Extensor) -> Extensor:
+    """The pairing of a dual twistor W, in the right ideal P Even, with a twistor Z, in the left ideal Even P:
+    W Z lies in P Even P, the complex line of P, and `trace` reads it as a complex number. Complex-linear in both and
+    free of any metric: invariant under every invertible even V acting as Z -> V Z, W -> W V^-1, not only Spin(2,4)."""
+    return trace(dual * twistor_)
+
+
+def conjugate(twistor_: Extensor) -> Extensor:
+    """The dual twistor of Z under the norm: ~Z = P ~Psi, in the right ideal since P is its own reverse. The reverse
+    is antilinear (~I = -I), so this is the duality map Z -> conj(Z) of the Hermitian form, h(Z1, Z2) = pairing(~Z1, Z2)."""
+    return ~twistor_
+
+
 def inner(first: Extensor, second: Extensor) -> Extensor:
     """The twistor norm h(Z1, Z2) = 4 <~Z1 Z2>_{0,6}: a scalar plus a pseudoscalar, the complex number
-    `as_complex` reads. Antilinear in the first twistor, linear in the second."""
-    product = ~first * second
-    return 4 * (product.restrict_grade(0) + product.restrict_grade(6))
+    `as_complex` reads. Antilinear in the first twistor, linear in the second: the pairing of the dual twistor
+    `conjugate(Z1)` with Z2, invariant under the V with ~V V = 1, Spin(2,4) = SU(2,2)."""
+    return pairing(conjugate(first), second)
 
 
 def as_complex(value: Extensor) -> np.ndarray:

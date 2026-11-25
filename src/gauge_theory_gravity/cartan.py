@@ -1,9 +1,9 @@
 """Cartan geometry from a tetrad, on extensors.
 
 The coframe is the extensor  e : Direction(frame) <- Direction(coordinate),  e(d_nu) = e^a_nu e_a, with events
-and directions intrinsic antivectors (see `algebra`).  The metric is the form  g = e | e  (the algebra's own metric
-eta, pulled back), the frame vectors are E = e^-1, the Christoffel symbols come from the derivative of g, and the
-Lorentz connection is the bivector-valued map  Omega : Bivector <- Direction  with
+and directions intrinsic antivectors (see `algebra`).  The metric is the flat duality map eta pulled back across the
+coframe by its adjugate, g = e^adj eta e : Slice <- Direction, read as the form g(v) & w (equal to e | e).  The frame
+vectors are E = e^-1, the Christoffel symbols come from the derivative of g, and the Lorentz connection is the bivector-valued map  Omega : Bivector <- Direction  with
 1/2 [Omega(d_mu), v] = (nabla_mu v)^a e_a,  so that the curvature of Omega is the Riemann bivector map (checked
 against an independent index implementation in tests).
 
@@ -67,10 +67,22 @@ def spatial_radius(position: Extensor) -> Extensor:
 
 
 # --- geometry from a coframe ---------------------------------------------------------------------
+def metric_map(coframe: Coframe) -> Callable[[Extensor], Extensor]:
+    """x -> g = e^adj eta e : Slice <- Direction, the flat duality map pulled back across the coframe by congruence.
+    The adjugate carries a slice back across e with no metric and no inverse, `c & e(v) == e.adjugate()(c) & v`, so
+    `g(v) & w == eta(e(v)) & e(w)`; it is symmetric in the metric-free sense, `g == g.adjugate()`."""
+    def duality(x: Extensor) -> Extensor:
+        e = coframe(x)
+        return e.adjugate()(al.FLAT_METRIC(e))
+    return duality
+
+
 def metric(coframe: Coframe) -> Callable[[Extensor], Extensor]:
-    """x -> g = e | e : Scalar <- (Direction, Direction)."""
+    """x -> the metric as a form, g(v) & w : Scalar <- (Direction, Direction); equal to e | e."""
+    duality = metric_map(coframe)
+
     def form(x: Extensor) -> Extensor:
-        return coframe(x) | coframe(x)
+        return duality(x) & Direction
     return form
 
 
