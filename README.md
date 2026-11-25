@@ -8,7 +8,8 @@ $\mathrm{Cl}(2,4;\mathbb R)$, and a numerical test-bed that checks it. The propo
 The test-bed, `src/gauge_theory_gravity`, is written on [numga](https://github.com/EelcoHoogendoorn/numga) extensors with JAX
 autodiff. It implements the 15-component bivector connection $\Omega(a,x)$, versor gauge transformations, the covariant
 derivative, the curvature and path-ordered transport, and evaluates them on given spacetimes. It does not solve any
-field equations: the proposal leaves the dynamics open, and so does the code.
+field equations: the proposal leaves the dynamics open. The code derives the field equations of chosen actions
+pointwise and checks known solutions against them.
 
 ## What has been checked
 
@@ -32,6 +33,25 @@ field equations: the proposal leaves the dynamics open, and so does the code.
   turned by the twistor's phase) in coordinates. Restricted to the ω half, the twistor trace of $F\tilde F$ is the
   complex Weyl invariant $\tfrac12(C^2+i\,C{}^*C)$, exactly $24M^2/(r-ia\cos\theta)^6$ for Kerr, and is exported
   for ParaView.
+- **GTG gauge freedom (11.2):** Schwarzschild's Painlevé–Gullstrand and Kerr–Schild gauges are related by a GTG
+  displacement $t\mapsto t+F(r)$ and a radial boost of rapidity $\ln(1+\sqrt{2M/r})$. Together they act on the full
+  CSTA connection as a spec gauge transformation, inside the horizon too, and the PG rotation gauge field is Doran and
+  Lasenby's closed form.
+- **Weyl rescaling (11.3):** rescaling the coframe by $e^\lambda$ changes the normal connection by the versor
+  $e^{-\lambda\,n_o\wedge n_\infty/2}\,e^{\Upsilon\wedge n_o/2}$ with $\Upsilon=\nabla\lambda$. The dilation
+  factor alone switches on the dilation sector with $b=d\lambda$; the special conformal factor removes it. Weyl squared
+  scales by $e^{-4\lambda}$.
+- **Compensator (11.4, first step):** the scale tractor $I=\sigma\,n_\infty+\nabla\sigma+\rho\,n_o$, the CSTA
+  form of the infinity twistor, is Weyl-covariant and has $I\cdot I=-R/12$ at $\sigma=1$ (the Einstein–Hilbert
+  density). It is parallel for the normal connection exactly on Einstein metrics: $I=n_\infty$ for Schwarzschild and
+  Kerr, $I\cdot I=\Lambda/3$ for de Sitter, and no scale exists for the non-Einstein test geometries.
+- **Field equations:** a pointwise Euler–Lagrange operator for coframe densities (autodiff, no grid). It gives
+  the Einstein tensor from $\sqrt g\,R$ and the Bach tensor from $\sqrt g\,C^2$, both against independent index
+  formulas, and Bach vanishes on Schwarzschild, Kerr, FRW and de Sitter.
+- **Einstein gravity (11.4), second-order form:** the Weyl-invariant compensator action
+  $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$ gives, in the gauge $\sigma=1$, exactly Einstein's equations with
+  $\Lambda=-6c$; the scale's own equation is the trace of the coframe equation. Schwarzschild, Kerr, de Sitter and a
+  Weyl-rescaled Schwarzschild with its scale solve them.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
@@ -45,8 +65,8 @@ field equations: the proposal leaves the dynamics open, and so does the code.
   curvature's generator components on request. Ray paths go out as polylines carrying the twistor's state and the
   accumulated versor.
 
-Not established: any action or field equations, recovery of Einstein gravity (11.4), the role of the dilation field
-(11.3), and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim with
+Not established: Einstein gravity in first-order form, with the full CSTA connection varied independently (11.4;
+it is recovered in second-order form), a dilation field that is not pure gauge (11.3), and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim with
 its test and tolerance; [DEEP_DIVE.md](DEEP_DIVE.md) explains the construction.
 
 | Schwarzschild | Kerr, $a=0.9$ |
@@ -60,15 +80,15 @@ which shows where the curvature is strong and how much of it is a boost (gravito
 
 ## Running it
 
-Python 3.11 or later. numga is installed from GitHub at the commit this code was tested against (`8b22fde9`); its
-`examples` package comes with it and is used by the Kerr cross-check test:
+Python 3.11 or later. `pyproject.toml` pins numga to the commit this code was tested against (`8b22fde9`) and installs
+it from GitHub. The `render` extra adds matplotlib and pillow for the figures; `test` adds those, pytest, vtk, and
+numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's NVIDIA GPU backend:
 
 ```sh
 python -m venv .venv && source .venv/bin/activate
-pip install "numga[linalg,jax,examples,test] @ git+https://github.com/EelcoHoogendoorn/numga@8b22fde9" h5py vtk pillow
-pip install -U "jax[cuda12]"          # optional, for an NVIDIA GPU
-pytest                                 # 190 tests, about 24 min on an RTX 3060
-pytest -m slow tests/test_export.py tests/test_rays.py   # curvature chain on grids; transport convergence
+pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
+pytest                                 # 233 tests; 190 of them took about 24 min on an RTX 3060
+pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py   # grids; transport; Bach; Einstein
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
 python -m gauge_theory_gravity.examples.render slices holonomy twistor schwarzschild kerr   # schwarzschild and kerr take about an hour each
@@ -87,8 +107,10 @@ returned wrong values on the GPU (see RESULTS.md).
 |---|---|
 | `src/gauge_theory_gravity/algebra.py` | the algebra, null basis, generators, direction and slice types, sector projectors |
 | `fields.py`, `gauge.py`, `covariant.py`, `curvature.py`, `transport.py` | sections 4–8 of the proposal |
-| `cartan.py` | geometries as coframes with closed-form frames (Painlevé–Gullstrand, FRW, lapse, boosted, Kerr–Schild), Christoffel symbols, Lorentz connection |
+| `cartan.py` | geometries as coframes with closed-form frames (Painlevé–Gullstrand, FRW, de Sitter, lapse, boosted, Kerr–Schild), Christoffel symbols, Lorentz connection |
 | `conformal.py`, `invariants.py`, `sta_embedding.py` | the full conformal connection, normal conditions, Schouten, Weyl squared, the Lorentz sector |
+| `compensator.py` | the scale tractor (infinity twistor) of a scale, its tractor derivative, the integrability test for an Einstein scale |
+| `variation.py` | field equations: the pointwise Euler–Lagrange derivative of a coframe density; Einstein–Hilbert and Weyl-squared densities |
 | `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, SU(2,2) matrices, the complex Weyl invariant |
 | `hypersurface.py` | fields on a 4D coordinate grid, hypersurfaces $x^\mu=c$, their layout and extraction |
 | `export.py` | VTKHDF export of hypersurfaces for ParaView: invariants, sector magnitudes and components |

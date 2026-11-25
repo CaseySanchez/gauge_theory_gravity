@@ -651,15 +651,25 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 
 ## 11. Limits and open questions
 
-- **No dynamics.** There are no field equations; the code evaluates the kinematic structure on given geometries, as the
-  proposal leaves the dynamics open.
+- **No dynamics yet.** The code evaluates the kinematic structure on given geometries; the proposal leaves the dynamics
+  open. `variation.py` can now vary a coframe density pointwise (Einstein tensor from $\sqrt g R$, Bach tensor from
+  $\sqrt g C^2$), and the compensator action below has been varied.
 - **Einstein gravity (§11.4)** needs more than the Weyl-squared density: a compensator, a symmetry-breaking mechanism
-  or constraints. The infinity twistor, which fixes $n_\infty$ and so the ω/π split, is a candidate for that structure;
-  it is not implemented.
+  or constraints. The infinity twistor, which fixes $n_\infty$ and so the ω/π split, is a candidate for that structure.
+  As the scale tractor $I=\sigma n_\infty+\nabla\sigma+\rho n_o$ it is implemented (`compensator.py`): it is
+  parallel exactly on Einstein metrics ($I=n_\infty$ when Ricci-flat, $I\cdot I=\Lambda/3$ otherwise) and
+  $I\cdot I=-R/12$ at $\sigma=1$. The Weyl-invariant action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$, varied in the
+  coframe and $\sigma$ (`variation.py`), gives exactly Einstein's equations with $\Lambda=-6c$ in the gauge
+  $\sigma=1$, and the $\sigma$ equation is the trace of the coframe equation. This recovers general relativity in
+  second-order form; a first-order form varying the full connection is not done.
 - **The GTG displacement field (§9.2, §11.2).** The translation sector is identified with an orthonormal coframe of a
   torsion-free metric. Whether that is a faithful reading of Doran and Lasenby's $h(a)$, with its fiducial flat
-  background, is not tested.
-- **The dilation field (§11.3)** is zero throughout.
+  background, is not tested in general. For Schwarzschild, GTG's two gauge freedoms (a displacement and a rotation)
+  carry the Painlevé–Gullstrand gauge to the Kerr–Schild one and act on the CSTA connection as a spec gauge
+  transformation.
+- **The dilation field (§11.3)** is zero except as pure gauge: a Weyl rescaling $e\to e^\lambda e$ is the gauge
+  transformation $e^{-\lambda\,n_o\wedge n_\infty/2}e^{\Upsilon\wedge n_o/2}$, $\Upsilon=\nabla\lambda$, of the
+  normal connection, and its dilation factor alone gives $b=d\lambda$. A dilation field with curl is not examined.
 - **Fundamental versors (§11.1).** Only pure-gauge flatness and transport were examined.
 - **Twistors.** No twistor form of the dynamics, no global twistor space (it exists only for conformally flat or
   half-flat spacetimes), and no two-twistor massive particles.

@@ -172,17 +172,102 @@ and `Psi P` picks one. All of the following hold to 1e-11 or better:
 
 Each geometry carries its frame field E with the coframe. PG (constant or growing mass) and Kerr-Schild are identity
 plus a dyad that squares to zero (for PG the time slice does not read the spatial shift), so E is identity minus the
-dyad; FRW `TimePart + SpacePart/a`, lapse `TimePart/N + SpacePart`, boost `rotor << E(rotor >> x)`. For all six
+dyad; FRW and de Sitter `TimePart + SpacePart/a`, lapse `TimePart/N + SpacePart`, boost `rotor << E(rotor >> x)`. For all seven
 geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier result is unchanged.
+
+## GTG gauge freedom and Weyl rescaling (spec 11.2, 11.3; `tests/test_gtg_gauges.py`, `tests/test_weyl_rescaling.py`)
+
+* **Displacement and rotation gauges (11.2).** Schwarzschild in the Newtonian (Painleve-Gullstrand) gauge and in the
+  Kerr-Schild gauge (`kerr(M, 0)`) are related by a GTG displacement t_KS = t_PG + F(r),
+  F = 4M ln((sqrt r + sqrt 2M)/sqrt 2M) - 2 sqrt(2Mr), and a radial boost of rapidity ln(1 + sqrt(2M/r)) (derived by
+  hand; its sign fixed numerically). At r = 2.23 M and r = 1.12 M (inside the horizon): the pulled-back Kerr-Schild
+  metric equals PG to 1e-14, the pulled-back coframe is the boosted PG coframe to 1e-14, and the pulled-back full CSTA
+  connection (Lorentz and translation sectors) equals the PG connection transformed by the boost with the spec's law
+  Omega' = R Omega ~R - 2 dR ~R, to 1e-13. D phi from autodiff matches its closed form, F' = -s/(1+s), to 1e-14.
+* **Doran-Lasenby PG rotation gauge field.** In the PG frame, Omega(E_0) = 0 and Omega(E_k) is a pure boost turning
+  d_0 into -B_ik d_i, B = sqrt(2M/r^3)(1 - 3/2 r^ r^) (Cartan's first structure equation), to 1e-14.
+* **Weyl rescaling (11.3).** For e -> e^lambda e with a lambda depending on all four coordinates, on Schwarzschild and
+  the static lapse: the normal connection of the rescaled coframe is the normal connection of e transformed by
+  V = exp(-lambda/2 n_o ^ n_inf) exp(1/2 Upsilon ^ n_o), Upsilon = grad lambda in the frame of e, to 1e-13 (the factor
+  order, signs and halves were found by a search over the obvious candidates; only this one matched). The dilation
+  factor alone leaves the Lorentz sector unchanged, scales the translation sector by e^lambda and the special-conformal
+  sector by e^-lambda, and switches on the dilation sector with b = d lambda exactly (1e-14); the curvature's dilation
+  sector stays zero. Weyl squared scales by e^{-4 lambda} to 1e-12.
+* So in these checks the dilation and special-conformal sectors carry a choice of scale (gauge), not extra degrees of
+  freedom. Not checked: a dilation field that is not d lambda (b with nonzero curl, which changes the curvature's
+  dilation sector), Doran's spinning PG gauge of Kerr, and any dynamics.
+
+## The scale tractor as compensator (spec 11.4, first step; `compensator.py`, `tests/test_compensator.py`)
+
+* `scale_tractor(coframe, sigma)` builds I = sigma n_inf + grad sigma + rho n_o, rho = -1/4 (box sigma + J sigma), a
+  field of R^{2,4} vectors (the standard tractor formula; its signs and factors in this algebra were read off V >> n_inf,
+  and rho matched at the first try). `tractor_derivative` is D_a I = a . grad I + Omega(a) x I with the normal connection.
+* **Weyl covariance.** On e^lambda times Schwarzschild, I(sigma = e^lambda) = V >> n_inf with the 11.3 versor V, to
+  1e-14, and it is parallel. On the static lapse (not Einstein), I(e^lambda e, e^lambda) = V >> I(e, 1) to 1e-13, so
+  I . I is Weyl-invariant.
+* **Einstein-Hilbert density.** At sigma = 1, I . I = -J/2 = -R/12 to 1e-14 on the static lapse, growing mass and de
+  Sitter. The conformally invariant density sqrt(g) sigma^-4 I . I is therefore -sqrt(g) R/12 in the gauge sigma = 1.
+* **Parallel exactly on Einstein metrics.** D I = 0 at sigma = 1 for Schwarzschild, Kerr a = 0.9 (I = n_inf, null) and
+  de Sitter (`cartan.de_sitter`, flat slicing, I . I = H^2 = Lambda/3), to 1e-13. Not parallel (> 1e-2) on the static
+  lapse and the growing mass. `wave_operator` matches the closed form on de Sitter to 1e-13.
+* **Integrability.** A parallel I satisfies F(a, b) x I = 0. `parallel_candidates` returns the null space at a point.
+  It always contains n_o when the torsion sector vanishes (Weyl and Cotton curvature commute with n_o), but n_o has
+  scale I . n_o = 0. For the static lapse and the growing mass n_o is the only candidate, so neither is conformally
+  Einstein near the point; for Schwarzschild the null space is span(n_o, n_inf).
+* So the infinity twistor of proposal section 10 can be read as this compensator: fixing it to n_inf (Ricci-flat) or
+  to a constant non-null vector (Lambda) selects Einstein metrics, and its norm gives the Einstein-Hilbert density.
+  Not done: varying an action built from it (needs the Euler-Lagrange machinery of plan phase 1), and the
+  MacDowell-Mansouri form.
+
+## Field equations by the pointwise Euler-Lagrange operator (plan for 11.4, phase 1; `variation.py`, `tests/test_variation.py`)
+
+* `euler_lagrange(density, coframe, x4)` returns E[a, mu] = delta S / delta e^a_mu for a density of order <= 2 in the
+  coframe. The coefficients dL/d(d_alpha e) are read at x by perturbing the coframe with a polynomial centred there
+  and differentiating in its amplitude (`jax.jacfwd`); E = A - d_mu A^mu + sum_{mu<=nu} d_mu d_nu A^{mu nu}. No grid,
+  no integration. About 45-125 s per point on the CPU (the GPU was occupied by another process).
+* **Einstein-Hilbert** sqrt(g) R: E = -2 sqrt(g) e_{a nu} G^{mu nu}, i.e. delta S/delta g_{mu nu} = -sqrt(g) G^{mu nu},
+  against G from the array reference's Christoffel symbols, to 1e-13 (static lapse) and 1e-12 (FRW, slow); zero on
+  Schwarzschild to 1e-13.
+* **Weyl squared** sqrt(g) C^2: E = -8 sqrt(g) e_{a nu} B^{mu nu}, i.e. delta S/delta g_{mu nu} = -4 sqrt(g) B^{mu nu},
+  against the Bach tensor B_ab = nabla^c nabla_c P_ab - nabla^c nabla_a P_bc + P^cd C_acbd written out on the array
+  reference, to 1e-13 on the static lapse (|B| ~ 0.7). Bach-flat to 1e-13 on Schwarzschild, and (slow) on Kerr a = 0.9,
+  FRW and de Sitter to 1e-12.
+* **Noether identities.** Local Lorentz invariance (eta E e^T symmetric) holds to 1e-13 for both densities; the Weyl
+  trace E[a, mu] e^a_mu vanishes for Weyl squared to 1e-13 (B is trace-free).
+* The factors -2 and -8 were not assumed: they came out of a fit at one point and then hold to rounding.
+
+## The compensator action: Einstein's equations (plan for 11.4, phase 3A; `tests/test_compensator_action.py`)
+
+* `variation.compensator_density(c)` is sqrt|g| sigma^-4 (I . I + c) with the scale tractor I of sigma; it is
+  Weyl-invariant, and with g' = g/sigma^2 it is -sqrt|g'| (R' + 12 c)/12. `euler_lagrange_with_scale` varies it in the
+  coframe and in sigma.
+* **Einstein's equations in the gauge sigma = 1.** The coframe equation is sqrt(g) e_{a nu} (G^{mu nu}/6 + c g^{mu nu}):
+  on the static lapse it equals -1/12 of the array reference's Einstein-Hilbert equation to 1e-14. So the field
+  equations are G + 6 c g = 0, Einstein's with Lambda = -6c (de Sitter at Hubble rate H has G = 3 H^2 g here), and on
+  shell I . I = -R/12 = -2c.
+* **Solutions.** de Sitter (H = 0.5) with c = -H^2/2 solves both equations to 1e-14; with c = 0 it does not (0.36,
+  slow). Kerr a = 0.9 with c = 0 (slow). A Weyl-rescaled Schwarzschild (e^lambda e, not Einstein) with its scale
+  sigma = e^lambda solves both to 1e-14, and with sigma = 1 it does not (slow): the solution is a class under Weyl
+  rescaling together with its scale, as the gauge picture of 11.3 says.
+* **The scale equation is the trace.** E_sigma sigma + E[a, mu] e^a_mu = 0 to 1e-14 off shell, at sigma = 1 and (slow)
+  with a nonconstant sigma and c = 0.3: Noether's identity of the Weyl invariance, so sigma carries no equation of its
+  own and the gauge sigma = 1 loses nothing.
+* What this establishes for 11.4: in the CSTA, with the scale tractor (infinity twistor) as compensator, this action's
+  equations are exactly Einstein's with a cosmological constant. It is a reformulation of general relativity, not a
+  new theory. Not done: adding alpha Weyl^2 (Einstein metrics still solve it, being Bach-flat) and whether the
+  proposal wants it; the MacDowell-Mansouri form (phase 3B); writing the action in terms of the full connection
+  Omega and varying Omega independently (first-order form); matter.
 
 ## Not done / not established (be careful when citing)
 
-* **No field equations, no compensator, no Einstein recovery.** Only the density of the quadratic action was checked. Varying it (Bach equations), adding a compensator field, and a symmetry-breaking mechanism were not attempted. Spec 11.4 remains open.
+* **Einstein recovery only in second-order form.** The compensator action sqrt(g) sigma^-4 (I . I + c) gives Einstein's equations with Lambda (section above), but as an action of the coframe and the scale, with the connection the normal one; a first-order form varying the full CSTA connection, the MacDowell-Mansouri form, matter couplings and any Weyl^2 admixture were not attempted. Spec 11.4 is answered for this action only.
 * **Displacement gauge field of GTG.** For Kerr-Schild Kerr (and so Schwarzschild at a = 0) the CSTA's translation and
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
-  independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). Not checked: GTG's gauge freedom in
-  h (other gauges, e.g. the Doran PG gauge with its own rotation field), and GTG's field equations themselves.
-* **Dilation gauge field b** was set to zero everywhere in Tier B; its dynamics/gauge-fixing was not explored (spec 11.3).
+  independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
+  then checked for Schwarzschild between the PG and Kerr-Schild gauges (section above). Not checked: Doran's spinning
+  PG gauge of Kerr, and GTG's field equations themselves.
+* **Dilation gauge field b** is zero in Tier B. The only nonzero b examined is the pure gauge b = d lambda of a Weyl
+  rescaling (section above); a b with nonzero curl and any dynamics or gauge fixing were not explored (spec 11.3).
 * **Fields are callables on points.** Identities are checked pointwise; 4D lattices appear only for export (`hypersurface.Grid4`), sampled from the callables.
 * **Fundamental versor fields (spec 11.1)** not explored beyond pure-gauge flatness.
 * Phase 6's Lorentz-sector equivalence is kinematic: it verifies that F in the sector is the Riemann bivector map; no GTG dynamical equations were involved.
