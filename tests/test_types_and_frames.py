@@ -11,6 +11,7 @@ GEOMETRIES = {
     "schwarzschild": (cartan.schwarzschild(1.0), al.point([0.3, 1.7, -0.9, 1.1])),
     "growing_mass": (cartan.growing_mass(), al.point([0.3, 1.7, -0.9, 1.1])),
     "frw": (cartan.friedmann(), X),
+    "de_sitter": (cartan.de_sitter(), X),
     "lapse": (cartan.static_lapse(), X),
     "flyby": (cartan.boosted(cartan.schwarzschild(1.0), 0.6), al.point([0.3, 1.7, -0.9, 1.1])),
     "kerr": (cartan.kerr(1.0, 0.7), al.point([0.3, 1.7, -0.9, 1.1])),

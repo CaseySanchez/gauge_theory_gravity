@@ -190,6 +190,21 @@ def friedmann(exponent: float = 2.0 / 3.0) -> Geometry:
     return Geometry(coframe, frame)
 
 
+def de_sitter(hubble: float = 0.5) -> Geometry:
+    """de Sitter in flat slicing, e^0 = dt, e^i = e^{H t} dx^i: Einstein with cosmological constant 3 H^2 and
+    conformally flat."""
+    def scale(x: Extensor) -> Extensor:
+        return (hubble * coordinate(x, 0)).exp()                                 # [] Scalar+
+
+    def coframe(x: Extensor) -> Extensor:
+        return TimePart + scale(x) * SpacePart                                   # Direction- <- Direction-
+
+    def frame(x: Extensor) -> Extensor:
+        return TimePart + SpacePart / scale(x)                                   # Direction- <- Direction-
+
+    return Geometry(coframe, frame)
+
+
 def static_lapse() -> Geometry:
     """e^0 = N(x) dt, e^i = dx^i with a smooth lapse N: generically not conformally flat, with matter."""
     def lapse(x: Extensor) -> Extensor:
