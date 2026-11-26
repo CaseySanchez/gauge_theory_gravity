@@ -27,9 +27,12 @@ The fifteen bivectors split into the four sectors of §3:
 M_{ab}=e_a\wedge e_b\ (6),\qquad P_a=e_a\wedge n_\infty\ (4),\qquad K_a=e_a\wedge n_o\ (4),\qquad D=n_o\wedge n_\infty\ (1).
 ```
 
-`GENS` lists them in this order. `GEN`, the $15\times15$ matrix from generator coordinates to numga's blade order, is
-used only to specify test connections and to compute structure constants; nothing in the construction goes through
-it. `tests/test_algebra.py` checks that the generators are independent, that they close as
+`GENS` lists them in this order, and `GENERATORS` stacks them as one batch. Their reciprocals come from a reflection:
+$n\,G\,n$ swaps $n_o$ and $n_\infty$ up to sign, so $\langle (nG_in)\,G_j\rangle_0$ is diagonal and
+`RECIPROCALS` $=nG_in/\langle nG_in\,G_i\rangle_0$ satisfies $\langle G^iG_j\rangle_0=\delta^i_j$. Generator coordinates
+are then $c^i=\langle G^iB\rangle_0$ (`generator_coordinates`), and `bivector` sums $c^iG_i$; these are used only to
+specify test connections and to compute structure constants, with no matrix between the two bases.
+`tests/test_algebra.py` checks the reciprocity (so the generators are independent), that they close as
 $\mathfrak{so}(2,4)$ with the expected pattern ($[M,P]\subset P$, $[P,P]=[K,K]=0$, $[D,P]\propto P$ and
 $[D,K]\propto K$ with opposite signs, $[P,K]\subset M\oplus D$), and the Jacobi identity.
 
@@ -82,7 +85,7 @@ sandwich. $X$ is null, has weight $X\cdot n_\infty=1$, and reads back the event'
 ### 1.4 The pseudoscalar
 
 $I=e_te_xe_ye_ze_+e_-$ squares to $-1$, commutes with every even element and anticommutes with every vector. It is
-the imaginary unit of the twistor construction (§7).
+the imaginary unit of the twistor construction (§6).
 
 ---
 
@@ -99,6 +102,10 @@ read by **extrinsic slices**, vectors in $t,x,y,z$, through the regressive produ
 - `SLICES = [t, -x, -y, -z]` read them: `SLICES[mu] & DIRECTIONS[nu]` is $\delta^\mu_\nu$.
 - The metric on directions is still `|`, with $\partial_\mu|\partial_\nu=\eta_{\mu\nu}$.
 - `ORIGIN` and `INFINITY` are $n_o$ and $n_\infty$ as intrinsic points.
+- `VOLUME` $=\partial_t\,\&\,\partial_x\,\&\,\partial_y\,\&\,\partial_z$ is the volume of directions. `on_volume`
+  evaluates a 4-form of directions on it, tracing each input against `VOLUME_READING`, so a top form needs no
+  Levi-Civita symbol. A coframe's determinant is read from its outermorphism, $e(\texttt{VOLUME})=\det e\;\texttt{VOLUME}$
+  (`variation.determinant`).
 
 numga checks orientation statically, so adding a slice to a direction, or feeding a slice where the connection
 expects a direction, fails before any arithmetic runs. Generators, versors and spinors are extrinsic.
@@ -232,7 +239,8 @@ e=\mathrm{Id}+N,\quad N^2=0\quad\Longrightarrow\quad E=\mathrm{Id}-N .
   slice does not read the spatial shift, so the dyad squares to zero.
 - **Kerr–Schild:** `Direction - profile * null * (null.dual_inverse() & Direction)`, with $l$ null in the flat
   metric (`null_dyad`).
-- **FRW and the static lapse:** `TimePart + a * SpacePart` and `N * TimePart + SpacePart`, inverted term by term.
+- **FRW, de Sitter and the static lapse:** `TimePart + a * SpacePart` and `N * TimePart + SpacePart`, inverted term
+  by term.
 - **Boost:** a rotor sandwich, $e'(x)=e(R\rhd x)\circ(R\rhd\cdot)$ with $R=\exp\bigl(\tfrac12\mathrm{artanh}(v)\,t\wedge x\bigr)$,
   and frame $E'(x)=R^{-1}\rhd E(R\rhd x)$ (`rotor << ...`).
 
@@ -280,6 +288,7 @@ $R^a{}_{b\mu\nu}$ from Christoffel symbols directly.
 | Schwarzschild (`schwarzschild`) | Painlevé–Gullstrand, $e^0=dt$, $e^i=dx^i+\beta^idt$ | vacuum; regular through $r=2M$ |
 | growing mass (`growing_mass`) | as above with $M(t)$ rising by a tanh | torsion-free toy with matter |
 | FRW (`friedmann`) | $e^0=dt$, $e^i=a(t)dx^i$, $a=t^{2/3}$ | conformally flat, with matter |
+| de Sitter (`de_sitter`) | $e^0=dt$, $e^i=e^{Ht}dx^i$ | Einstein with $\Lambda=3H^2$; conformally flat |
 | static lapse (`static_lapse`) | $e^0=N(\mathbf x)dt$, $e^i=dx^i$ | Weyl, Ricci and Cotton all nonzero |
 | boosted (`boosted`) | $e'(x)=e(Lx)L$ | a moving hole |
 | Kerr (`kerr`) | $e=\mathrm{Id}-f\,l\,(l\cdot)$, $f=Mr^3/(r^4+a^2z^2)$, $l=\partial_t-n$ | vacuum, rotating; GTG's position gauge field |
@@ -288,7 +297,7 @@ Both black-hole charts are horizon-penetrating, so grids and ray tracing can run
 
 ---
 
-## 5. The conformal connection, §9–10 (`conformal.py`, `invariants.py`)
+## 5. The conformal connection and its dynamics, §9–11 (`conformal.py`, `invariants.py`, `compensator.py`, `variation.py`, `first_order.py`)
 
 ### 5.1 The full connection
 
@@ -344,7 +353,7 @@ evaluated in the frame as `(framed * ~framed).restrict[0].contract(1, 3).contrac
 For the normal connection $I=\tfrac12C_{abcd}C^{abcd}$; for the Lorentz connection alone, in vacuum,
 $I=\tfrac12R_{abcd}R^{abcd}$, which is $24M^2/r^6$ for Schwarzschild. `weyl_squared` computes $C^2$ independently as
 $R_{abcd}R^{abcd}-2R_{ab}R^{ab}+\tfrac13R^2$. This is the remark of §10 made concrete: a curvature-squared action of the
-normal connection is Weyl-squared gravity. Only the density is computed; there are no field equations.
+normal connection is Weyl-squared gravity. Its field equations are in §5.7 and §5.8.
 
 ### 5.4 Generator roles
 
@@ -365,6 +374,58 @@ general $\mathrm{Spin}(2,4)$ transformation moves it into the other sectors, so 
 gauge choice (§9.1). For Kerr (`tests/test_kerr.py`), the coframe and the Lorentz connection reproduce GTG's position
 and rotation gauge fields from numga's independent Kerr code; the connection is torsion-free and Ricci-flat, the
 normal $f$ vanishes, and $2I$ equals the Kerr Kretschmann scalar.
+
+### 5.6 The scale tractor
+
+A choice of scale $\sigma>0$, picking out the metric $g/\sigma^2$, gives a field of $\mathbb R^{2,4}$ vectors
+(`compensator.scale_tractor`),
+
+```math
+I=\sigma\,n_\infty+\nabla\sigma+\rho\,n_o,\qquad \rho=-\tfrac14\bigl(\Box\sigma+J\sigma\bigr),\quad J=R/6,
+```
+
+moved by the normal connection as $\mathcal D_aI=a\cdot\nabla I+\Omega(a)\times I$ (`tractor_derivative`). It is the
+CSTA form of the infinity twistor. Under a Weyl rescaling it transforms by the versor of §11.3, so $I\cdot I$ is
+Weyl-invariant, and $I\cdot I=-R/12$ at $\sigma=1$. It is parallel exactly when $g/\sigma^2$ is Einstein: $I=n_\infty$
+for Ricci-flat metrics, $I\cdot I=\Lambda/3$ for de Sitter. A parallel $I$ satisfies $F(a,b)\times I=0$;
+`parallel_candidates` returns that null space at a point, which rules out an Einstein scale where it holds only $n_o$.
+
+### 5.7 Field equations
+
+`variation.euler_lagrange(density, coframe, x)` returns $E[a,\mu]=\delta S/\delta e^a{}_\mu$ at one point, for a density
+of order at most two in the coframe. The first variation is $A\,h+A^\mu\partial_\mu h+\sum_{\mu\le\nu}A^{\mu\nu}\partial_\mu
+\partial_\nu h$; each coefficient is read by perturbing the coframe with a monomial centred at $x$ and differentiating in
+its amplitude (`jax.jacfwd`), and
+
+```math
+E=A-\partial_\mu A^\mu+\sum_{\mu\le\nu}\partial_\mu\partial_\nu A^{\mu\nu}.
+```
+
+Nothing is integrated and no grid is used. The densities carry the volume $|\det e|$ of §2.1: $\sqrt g\,R$ gives
+$-2\sqrt g\,e_{a\nu}G^{\mu\nu}$ and $\sqrt g\,C^2$ gives $-8\sqrt g\,e_{a\nu}B^{\mu\nu}$ (Bach), both checked against index
+formulas on the array reference. `compensator_density(c)` is $\sqrt g\,\sigma^{-4}(I\cdot I+c)$, varied in the coframe and
+in $\sigma$ by `euler_lagrange_with_scale`: in the gauge $\sigma=1$ its coframe equation is Einstein's with
+$\Lambda=-6c$, and its $\sigma$ equation is the trace of the coframe equation.
+
+### 5.8 The first-order action
+
+`first_order.py` makes the full connection the only field. The origin $X=n_o$ and the infinity twistor $I=n_\infty$
+break $\mathrm{Spin}(2,4)$ to the Lorentz group; $DX=\Omega\times n_o$ is the coframe and $DI=\Omega\times n_\infty$ the
+special-conformal field (`covariant_points`). The action is a sum of top forms, each a wedge evaluated on `VOLUME`:
+
+```math
+S_1=\langle F\wedge DX\wedge DX\wedge X\wedge I\rangle,\quad
+S_2=\langle DI\wedge DI\wedge DX\wedge DX\wedge X\wedge I\rangle,\quad
+S_3=\langle (DX)^4\wedge X\wedge I\rangle .
+```
+
+`euler_lagrange_connection` varies all 60 components $\Omega^k{}_\mu$ with the operator of §5.7 at first order. For
+$S_1+\beta S_2+\gamma S_3$ the solutions have a torsion-free Lorentz sector, $f=e/\beta$ and an Einstein metric with
+$\Lambda=6(\gamma-1/\beta)$; at $\gamma=0$ they are the normal connections of Einstein metrics. The dilation field drops
+out. `macdowell_mansouri`, $\langle F\wedge F\wedge X\wedge I\rangle$, keeps only the Lorentz sector of $F$; it is
+$-\sqrt g\,C^2$ at the normal connection, and its equations give Weyl gravity with a Cotton condition. Added with weight
+$\mu$ to the Einstein action, it keeps the Einstein solutions and shifts the special-conformal field to
+$f=\tfrac{1-4\mu\gamma}{\beta}\,e$.
 
 ---
 
@@ -423,13 +484,20 @@ p^a=4\,\bigl\langle (e^a\wedge n_\infty)\,\langle Z\widetilde Z\rangle_4\,I\bigr
 It is null and future-pointing, Penrose's $p=\pi\bar\pi$, independent of $\omega$ and of the phase of $Z$.
 `from_momentum` inverts it for a ray through the origin.
 
-The phase is seen by the **null flag**: the real part of the self-dual bivector $\epsilon_{AB}\pi^A\pi^B$, which
-`flag` evaluates against each Lorentz generator. It is a null bivector $k\wedge s$, with $s$ a unit spacelike
-direction across the ray, fixed up to multiples of $k$. Multiplying $Z$ by $e^{I\theta}$ (`with_phase`) turns $s$ by
-$2\theta$ about $k$, and a Lorentz rotor carries the flag direction of $Z$ to that of $RZ$ as it carries vectors.
-`flag_direction(Z, u)` picks the representative orthogonal to a timelike direction $u$. The flag is quadratic, not
-Hermitian, in $\pi$; since $I$ is central in the even subalgebra, no even element conjugates a twistor, so the flag is
-computed in coordinates rather than as a product.
+The phase is seen by the **null flag**: the real part of the self-dual bivector $\epsilon_{AB}\pi^A\pi^B$. Since
+$I$ is central in the even subalgebra, no even element conjugates a twistor, but the odd element $C=e_te_ye_z$
+anticommutes with $I$ and supplies $\epsilon_{AB}$, so `flag` is one product,
+$\sqrt8\,\langle n_\infty\,\pi\,C\,\widetilde\pi\rangle_2$ projected on the Lorentz sector. It is a null bivector
+$k\wedge s$, with $s$ a unit spacelike direction across the ray, fixed up to multiples of $k$. Multiplying $Z$ by
+$e^{I\theta}$ (`with_phase`) turns $s$ by $2\theta$ about $k$, and a Lorentz rotor carries the flag direction of $Z$ to
+that of $RZ$ as it carries vectors.
+`flag_direction(Z, u)` picks the representative orthogonal to a timelike direction $u$, $s\propto u\cdot F/(u\cdot k)$,
+normalized in the algebra. The flag is quadratic, not Hermitian, in $\pi$.
+
+`size` is the positive-definite norm of the frame, $\sqrt{h(Z,\,e_xe_ye_ze_-Z)}$ (the product of the four
+negative-square directions); the ray tracer measures $|\omega|/|\pi|$ with it. `eigenvalues` gives the spectrum of
+an even element on $\mathbb T$ from the twistor traces of its powers (Newton's identities, then the roots of the
+characteristic polynomial).
 
 ### 6.4 Local twistor transport
 
@@ -507,14 +575,14 @@ a rotating analyzer.
 ### 7.5 Twistor holonomy figure
 
 `twistor_holonomy` transports twistors around $0.4\times0.4$ loops in the meridian plane of Kerr ($a=0.9$) with the normal
-connection and plots three panels: the largest $|\lambda-1|$ of each loop's $SU(2,2)$ matrix, how boost-like the loop's
+connection and plots three panels: the largest $|\lambda-1|$ of each loop's $SU(2,2)$ action, how boost-like the loop's
 curvature is (the angle of the dominant eigenvalue's logarithm from the imaginary axis, 0° rotation to 90° boost), and
 for comparison the phase of $\mathcal W$, $6\arctan(a\cos\theta/r)$. In type D the Weyl curvature acts on self-dual
 bivectors as multiplication by $\Psi_2\propto(r-ia\cos\theta)^{-3}$, so the boost fraction follows
 $|\arg\Psi_2|=3\arctan(a\cos\theta/r)$ folded into 0–90°: zero on the equator, largest near the poles. For spin zero the
-boost fraction is zero outside $r=2.5$, the region checked.
-
----
+boost fraction is zero outside $r=2.5$, the region checked. The spectrum is taken of $\log H$, not $H$: eigenvalues
+near 1 are ill-conditioned as roots of $H$'s characteristic polynomial, those of $\log H$ near 0 are not, and
+$\lambda=e^\mu$.
 
 ### 7.6 Ray paths, extrinsic and intrinsic transport (`examples/rays.py`)
 
@@ -543,8 +611,9 @@ because a mixed generator such as $2A_3-A_1$ is not built from the twistor it ac
 `observables` reads, per record: coordinates and affine parameter; the frame momentum, coordinate velocity, frame
 frequency and redshift relative to the camera; the screen carried by the flag; the drifts of the Killing energy and
 angular momentum; the twistor's coordinates, amplitudes, $h(Z,Z)$, $|\omega|/|\pi|$ and relative phase;
-and, for the extrinsic transport, $U$'s coefficients, $|U\widetilde U-1|$, the transported basis $Ue_a\widetilde U$ of $\mathbb R^{2,4}$,
-$\mathrm{tr}\,U/4$ on twistor space and $\mathrm{tr}\,(\widetilde U_0U)/4$ against the first ray. `write_paths` writes them as VTKHDF PolyData, drawn in any three of $(t,x,y,z)$.
+and, for the extrinsic transport, $U$'s coefficients, $|U\widetilde U-1|$, the transported basis $Ue_a\widetilde U$ of
+$\mathbb R^{2,4}$, $\mathrm{tr}\,U/4$ on twistor space and $\mathrm{tr}\,(\widetilde U_0U)/4$ against the first ray.
+`write_paths` writes them as VTKHDF PolyData, drawn in any three of $(t,x,y,z)$.
 
 ---
 
@@ -600,17 +669,20 @@ $\sqrt{2M/r_y}=v$. It is a gauge-dependent component of the connection; the inva
 `.contract` or `.trace`. Curvature, Bianchi, the spin connection, Ricci, Schouten, the invariants and the twistor
 structure are written without index bookkeeping.
 
-**numga's idiom.** Module-level named types, small named functions, and no `lambda` or `jax.numpy` in the package.
-Positions, steps and loops are batch axes of extensors.
+**numga's idiom.** Module-level named types, small named functions, and no `lambda` or `jax.numpy` in the package,
+except in the Euler–Lagrange operators of `variation.py` and `first_order.py`, whose perturbation amplitudes are JAX
+arrays differentiated by `jax.jacfwd`. Positions, steps and loops are batch axes of extensors. No raw linear algebra
+stands in for an algebra operation: generator coordinates use reciprocal generators, determinants the outermorphism,
+top forms `VOLUME`, and twistor norms and spectra the twistor products themselves.
 
 **Fields are callables, not lattices.** Derivatives are exact, the identities hold pointwise, and there is no
 discretization error in the identity tests. Grids appear only at the output: slices, renders and export.
 
 **Where arrays remain.**
 
-- `GEN`, to specify test connections in generator coordinates and for the structure constants;
 - the sixteen-unknown least-squares solve for the normal conditions;
-- the twistor flag and annihilator, which need complex coordinates and an SVD;
+- the Euler–Lagrange amplitudes and the arrays $E[a,\mu]$ and $E[k,\mu]$ they return;
+- the twistor annihilator (an SVD, used only by tests), and the scalar root-finding of `eigenvalues`;
 - the carry flags of the ray tracer's `lax.scan`;
 - `permute_inputs`, for the missing axis permutation.
 
@@ -632,43 +704,47 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 
 | Claim | Test file | Level |
 |---|---|---|
-| metric, null basis, 15 generators, $\mathfrak{so}(2,4)$ closure, Jacobi | `test_algebra.py` | exact |
+| metric, null basis, 15 generators and their reciprocals, $\mathfrak{so}(2,4)$ closure, Jacobi | `test_algebra.py` | exact |
 | $V\widetilde V=1$; `exp` against a matrix exponential | `test_gauge_curvature.py` | 1e-9 |
 | $\Omega'$ is a bivector; $\mathcal D'\Psi'=V\mathcal D\Psi$ | same | 1e-11 |
 | $[\mathcal D_a,\mathcal D_b]\Psi=\tfrac12F\Psi$; Bianchi; pure gauge is flat | same | 1e-10 |
 | transport is a versor; orders 2 and 4; reparametrization invariance; holonomy $\exp(-\tfrac12\epsilon^2F)$ | `test_transport.py` | 1e-6 to 1e-10; $O(\epsilon^3)$ |
 | Lorentz sector closed under Lorentz rotors, leaks under $\mathrm{Spin}(2,4)$; spin connection and Riemann against the index code; $48M^2/r^6$ | `test_lorentz_schwarzschild.py` | 1e-8 to 1e-12 |
 | torsion zero; normal $f$ is Schouten; Cotton sector; $I=\tfrac12C^2$; generator roles | `test_conformal_cartan.py`, `test_invariants_and_conformal_action.py` | 1e-8 to 1e-16 |
-| orientation typing; closed-form frames of six geometries | `test_types_and_frames.py` | 1e-13 |
+| orientation typing; closed-form frames of seven geometries | `test_types_and_frames.py` | 1e-13 |
 | Kerr: GTG gauge fields, torsion, Ricci, normal $f=0$, Kretschmann | `test_kerr.py` | 1e-12 to 1e-14 |
 | twistors: ideal, norm, split, translator and incidence, Klein correspondence, rays, transport curvature and holonomy, momentum, flag, Kerr Weyl invariant | `test_twistor.py` | 1e-9 to 1e-14 |
 | ray tracer: conservation, screen, redshift, polarization, incidence, camera screen | `test_render.py` | 5e-3 (integrator), 1e-12 |
 | VTKHDF layout; dual Weyl field; sector components rebuild $F(\partial_\mu,\partial_\nu)$; a fixed-$x$ section equals the fields at its events and the cut 4D grid; polylines | `test_export.py` | read back by VTK; 1e-10 |
 | 4D grid order; extraction on and between grid lines; display permutations; series only for $t=c$ | `test_hypersurface.py` | exact |
 | ray paths: $h(Z,Z)$, $|\omega|/|\pi|$, $U\widetilde U=1$ and $Ue_a\widetilde U$ orthonormal, fourth order against a fine reference | `test_rays.py` | 1e-9 to 1e-12; ratio 16 |
+| PG to Kerr–Schild by a displacement and a boost, as a spec gauge transformation; Doran–Lasenby PG rotation field | `test_gtg_gauges.py` | 1e-13 to 1e-14 |
+| Weyl rescaling as a gauge versor; $b=d\lambda$; $C^2\to e^{-4\lambda}C^2$ | `test_weyl_rescaling.py` | 1e-12 to 1e-14 |
+| scale tractor: Weyl covariance, $I\cdot I=-R/12$, parallel exactly on Einstein metrics, integrability | `test_compensator.py` | 1e-13 to 1e-14 |
+| Euler–Lagrange: Einstein and Bach tensors against index formulas, Bach-flat solutions, Noether identities | `test_variation.py` | 1e-12 to 1e-13 |
+| compensator action: Einstein's equations with $\Lambda=-6c$, solutions, scale equation is the trace | `test_compensator_action.py` | 1e-14 |
+| first-order action: Einstein solutions, $\Lambda=6(\gamma-1/\beta)$, normal connection at $\gamma=0$, non-solutions | `test_first_order.py` | 1e-13 to 1e-14 |
+| $\langle F\wedge F\wedge X\wedge I\rangle=-\sqrt g\,C^2$; Cotton condition; FRW solves, rescaled Schwarzschild does not | `test_macdowell_mansouri.py` | 1e-13 to 1e-14 |
+| quadratic admixture keeps Einstein solutions; linearized TT modes $-2k^2$ and $4k^4$ | `test_beyond_einstein.py` | 1e-13; 1e-6 to 1e-8 |
 
 ---
 
 ## 11. Limits and open questions
 
-- **No dynamics yet.** The code evaluates the kinematic structure on given geometries; the proposal leaves the dynamics
-  open. `variation.py` can now vary a coframe density pointwise (Einstein tensor from $\sqrt g R$, Bach tensor from
-  $\sqrt g C^2$), and the compensator action below has been varied.
-- **Einstein gravity (§11.4)** needs more than the Weyl-squared density: a compensator, a symmetry-breaking mechanism
-  or constraints. The infinity twistor, which fixes $n_\infty$ and so the ω/π split, is a candidate for that structure.
-  As the scale tractor $I=\sigma n_\infty+\nabla\sigma+\rho n_o$ it is implemented (`compensator.py`): it is
-  parallel exactly on Einstein metrics ($I=n_\infty$ when Ricci-flat, $I\cdot I=\Lambda/3$ otherwise) and
-  $I\cdot I=-R/12$ at $\sigma=1$. The Weyl-invariant action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$, varied in the
-  coframe and $\sigma$ (`variation.py`), gives exactly Einstein's equations with $\Lambda=-6c$ in the gauge
-  $\sigma=1$, and the $\sigma$ equation is the trace of the coframe equation. This recovers general relativity in
-  second-order form. In first-order form (`first_order.py`), with the origin $n_o$ and the infinity twistor $n_\infty$
-  as compensators, the action $\langle F\,DX\,DX\,X\,I\rangle+\beta\langle DI\,DI\,DX\,DX\,X\,I\rangle+
-  \gamma\langle (DX)^4X\,I\rangle$ varied in the full connection gives Einstein's equations with
-  $\Lambda=6(\gamma-1/\beta)$, and at $\gamma=0$ its solutions are the normal connections of Einstein metrics. The
-  quadratic action $\langle F\wedge F\wedge X\wedge I\rangle$, by contrast, is $-\sqrt g\,C^2$ at the normal
-  connection and gives Weyl gravity (FRW solves it) with a Cotton condition from its Lorentz equation. Adding
-  either quadratic term to an Einstein action keeps the Einstein solutions; linearized about flat space it adds a
-  massive spin-2 ghost, $m^2=-1/(24\alpha)$ for $\alpha\sqrt g\,C^2$ added to the compensator action.
+- **Dynamics.** The code varies chosen actions pointwise (§5.7, §5.8) and checks known geometries against the
+  resulting equations; it does not solve them for new geometries, and there is no matter.
+- **Einstein gravity (§11.4)** is recovered with the infinity twistor as compensator, while the curvature-squared density
+  alone gives Weyl gravity. In second-order form the compensator action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$ gives
+  Einstein's equations with $\Lambda=-6c$; in first-order form, varying the full connection with $n_o$ and $n_\infty$
+  fixed, $S_1+\beta S_2+\gamma S_3$ gives them with $\Lambda=6(\gamma-1/\beta)$. The term that makes the difference is
+  $S_2$, quadratic in the special-conformal field: without it, $\langle F\wedge F\wedge X\wedge I\rangle$ gives Weyl
+  gravity with a Cotton condition, which FRW solves. Adding a quadratic term to an Einstein action keeps the Einstein
+  solutions but, linearized about flat space, adds a massive spin-2 ghost, $m^2=-1/(24\alpha)$ for $\alpha\sqrt g\,C^2$.
+  Open:
+  - whether the proposal takes $\alpha=0$, or keeps the quadratic term as an effective correction below $m$;
+  - the scalar and vector sectors of the linearization, and the linearization of the first-order action;
+  - whether every Cotton-free solution of the quadratic action's coframe equation is Bach-flat;
+  - dynamics for the compensators themselves, which are fixed in both forms, and the physical meaning of $\beta$.
 - **The GTG displacement field (§9.2, §11.2).** The translation sector is identified with an orthonormal coframe of a
   torsion-free metric. Whether that is a faithful reading of Doran and Lasenby's $h(a)$, with its fiducial flat
   background, is not tested in general. For Schwarzschild, GTG's two gauge freedoms (a displacement and a rotation)

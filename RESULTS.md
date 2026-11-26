@@ -1,6 +1,8 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (190 tests, ~24 min on the GPU, plus three slow tests: `pytest -m slow tests/test_export.py tests/test_rays.py`). Demos:
+All checks below are executable: `source .venv/bin/activate && pytest` (250 tests), plus 20 slow tests, `pytest -m slow`
+(about 30 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
+`test_macdowell_mansouri.py` and `test_beyond_einstein.py`. Demos:
 `cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about an hour each at 480×360 on an RTX 3060).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
@@ -35,14 +37,19 @@ What is an extensor now:
   functions that need them). Geometries are identity-plus-dyad expressions (`Direction + shift * (t & Direction)`),
   a boost is a rotor sandwich (`rotor >> Direction`), test fields are random polynomials in the position built from
   multilinear maps (`c0 + c1(x) + c2(x, x)`), batches of positions/steps/loops are extensor batch axes, and the
-  ordered product of step versors is `cumprod`.
-* Still arrays: the `GEN` matrix (generator <-> blade coordinates, used to specify test connections and in the
-  structure-constant test), the 16-unknown least squares for the normal conditions (numpy `lstsq` on columns built
+  ordered product of step versors is `cumprod`. Exception: the Euler-Lagrange operators of `variation.py` and
+  `first_order.py` use `jax.numpy` and `lambda` closures for the perturbation amplitudes that `jax.jacfwd` differentiates.
+* Generator coordinates go through reciprocal generators (`RECIPROCALS`, from the reflection n G n), the coframe
+  determinant is the outermorphism on the pseudoscalar (`e(VOLUME) = det(e) VOLUME`), top forms are read on `VOLUME`
+  (`on_volume`, no Levi-Civita symbol), and the twistor flag is the product `<n_inf pi C ~pi>_2` with the odd
+  conjugation C = t y z. The `GEN` matrix survives only in `_array/`.
+* Still arrays: the 16-unknown least squares for the normal conditions (numpy `lstsq` on columns built
   from extensor residuals), the carry flags of the ray tracer's `lax.scan`, and `permute_inputs` (numga has no
   axis permutation for multilinear maps; it transposes the kernel).
-* The ray tracer now uses the CSTA's own connection: the momentum is a frame direction, `dk/dλ = -Ω(dx/dλ).commutator(k)`,
-  the geodesic equation as parallel transport; it reproduces the shadow radius (0.1670 vs 0.1681 rad at 160×120)
-  exactly as the earlier autodiff-of-the-Hamiltonian version did.
+* The ray tracer uses the CSTA's own connection. It first transported the frame momentum,
+  `dk/dλ = -Ω(dx/dλ).commutator(k)`, the geodesic equation as parallel transport, and reproduced the shadow radius
+  (0.1670 vs 0.1681 rad at 160×120) exactly as the earlier autodiff-of-the-Hamiltonian version did. It now transports
+  the ray's local twistor and reads k = momentum(Z) from it (section "Twistors").
 
 ## JAX on the GPU (RTX 3060, `jax[cuda12]`)
 
@@ -64,7 +71,7 @@ left.
 | Spec | Claim | Status | Evidence |
 |---|---|---|---|
 | 2.1 | e_t²=+1, e_{xyz}²=-1, e_+²=+1, e_-²=-1; 15 bivectors | verified | `test_algebra.py` |
-| 3 | n_o²=n_∞²=0, n_o·n_∞=1; 15 = 6+4+4+1 generators span the bivectors | verified | `test_algebra.py` (GEN invertible) |
+| 3 | n_o²=n_∞²=0, n_o·n_∞=1; 15 = 6+4+4+1 generators span the bivectors | verified | `test_algebra.py` (reciprocal generators, <G^i G_j>_0 = δ) |
 | 3 | so(2,4) sector structure: [M,M]⊂M, [M,P]⊂P, [M,K]⊂K, [M,D]=0, [P,P]=[K,K]=0, [D,P]∝P, [D,K]∝-K-type grading, [P,K]⊂M⊕D; Jacobi | verified | `test_structure_constants_so24` |
 | 5 | V Ṽ = 1 for V = exp(B), random 15-component B | verified, 1e-9 | numga generic exp agrees with an independent scipy `expm` of the 32×32 left-regular representation |
 | 5 | V and -V give the same adjoint action; adjoint action preserves grade-2 and the inner product | verified | `test_gauge_curvature.py` |
@@ -157,16 +164,20 @@ and `Psi P` picks one. All of the following hold to 1e-11 or better:
   (omega = 0) and moved by `dZ/dlambda = -1/2 Omega(velocity) Z` with the normal connection (Lorentz plus `k ^ n_inf`;
   Schouten zero in vacuum). At the disk (12x9 test scenes, 1800 steps), max |omega|/|pi| is 3.0e-7 (Schwarzschild) and
   3.2e-6 (Kerr a = 0.9), and the frequency ratio read from the twistor's momentum matches the transported momentum's to
-  3.9e-8 and 8.1e-6 (`test_render.py`, tolerance 5e-3). The full-size renders were not re-run; the twistor does not
-  change the shading.
+  3.9e-8 and 8.1e-6 (`test_render.py`, tolerance 5e-3). The full-size renders were re-run with the twistor (section
+  "Renderings").
 * Twistor holonomy of Kerr a = 0.9 on the meridian plane (`render twistor`, `output/render_twistor.png`; 40x40 loops of
   side 0.4 in (x, z), 27 s): eigenvalue deviation up to 0.345, SU(2,2) to 1.1e-14, boost fraction of the loop curvature
   (angle of the dominant eigenvalue's logarithm from the imaginary axis) 0.8 to 88 degrees. Control, 64 loops outside
   r = 2.5: 0.00 degrees for spin 0 and 1.3 to 56 degrees for a = 0.9, so the boost part comes from the spin. The panel
   beside it shows the phase of the complex Weyl invariant for comparison only; the two are not compared quantitatively.
   With spin 0, loops next to r = 0 blow up (deviation 4e8), so the figure is for Kerr only.
-* Not done: the Petrov type of Kerr from the eigenvectors of the twistor holonomy, and the infinity twistor's role in
-  breaking conformal to Poincare invariance.
+* The spectrum of the holonomy is computed in the algebra: `twistor.eigenvalues` takes the twistor traces of powers
+  (Newton's identities, then the characteristic polynomial's roots) of `log H`, where eigenvalues near 0 are
+  well-conditioned, and exponentiates; it matches a 4x4 matrix eigensolver to 4e-10 in angle. Norms on T use
+  `twistor.size`, the positive form h(Z, x y z n Z).
+* Not done: the Petrov type of Kerr from the eigenvectors of the twistor holonomy. The infinity twistor's role in
+  breaking conformal invariance is taken up in the compensator sections below.
 
 ## Closed-form frame fields (`cartan.Geometry`, `tests/test_types_and_frames.py`)
 
@@ -216,8 +227,7 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   Einstein near the point; for Schwarzschild the null space is span(n_o, n_inf).
 * So the infinity twistor of proposal section 10 can be read as this compensator: fixing it to n_inf (Ricci-flat) or
   to a constant non-null vector (Lambda) selects Einstein metrics, and its norm gives the Einstein-Hilbert density.
-  Not done: varying an action built from it (needs the Euler-Lagrange machinery of plan phase 1), and the
-  MacDowell-Mansouri form.
+  Actions built from it are varied in the sections below.
 
 ## Field equations by the pointwise Euler-Lagrange operator (plan for 11.4, phase 1; `variation.py`, `tests/test_variation.py`)
 
@@ -254,9 +264,8 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   own and the gauge sigma = 1 loses nothing.
 * What this establishes for 11.4: in the CSTA, with the scale tractor (infinity twistor) as compensator, this action's
   equations are exactly Einstein's with a cosmological constant. It is a reformulation of general relativity, not a
-  new theory. Not done: adding alpha Weyl^2 (Einstein metrics still solve it, being Bach-flat) and whether the
-  proposal wants it; the MacDowell-Mansouri form (phase 3B); writing the action in terms of the full connection
-  Omega and varying Omega independently (first-order form); matter.
+  new theory. The alpha Weyl^2 admixture, the MacDowell-Mansouri form and the first-order form follow below. Not
+  done: matter.
 
 ## First-order form: the full connection varied on its own (plan for 11.4; `first_order.py`, `tests/test_first_order.py`)
 
@@ -303,7 +312,7 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
 * So proposal section 10's symmetry breaking by this split gives Weyl gravity (with a Cotton condition from the
   first-order Lorentz equation), not Einstein. Einstein needs the term quadratic in the special-conformal field,
   <DI ^ DI ^ DX ^ DX ^ X ^ I>, of the first-order action above. Not checked: whether every Cotton-free solution of
-  the coframe equation is Bach-flat, and mixtures of the two actions.
+  the coframe equation is Bach-flat. Mixtures of the two actions: next section.
 
 ## Adding the quadratic action: same Einstein solutions, plus a ghost (plan for 11.4, phase 4; `tests/test_beyond_einstein.py`)
 
@@ -330,7 +339,12 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
 
 ## Not done / not established (be careful when citing)
 
-* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the compensator action) and in first-order form (the full connection varied, sections above), but with the compensators fixed (the scale, or X = n_o and I = n_inf); their own dynamics and matter couplings were not attempted. A Weyl^2 admixture keeps the Einstein solutions and adds a massive spin-2 ghost (section above).
+* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the
+  compensator action) and in first-order form (the full connection varied, sections above), but with the compensators
+  fixed (the scale, or X = n_o and I = n_inf); their own dynamics and matter couplings were not attempted. A Weyl^2
+  admixture keeps the Einstein solutions and adds a massive spin-2 ghost. Open: whether the proposal takes alpha = 0;
+  the scalar and vector sectors of the linearization and the first-order action's linearization; whether every
+  Cotton-free solution of the quadratic action's coframe equation is Bach-flat; the meaning of beta.
 * **Displacement gauge field of GTG.** For Kerr-Schild Kerr (and so Schwarzschild at a = 0) the CSTA's translation and
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
@@ -340,7 +354,7 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   rescaling (section above); a b with nonzero curl and any dynamics or gauge fixing were not explored (spec 11.3).
 * **Fields are callables on points.** Identities are checked pointwise; 4D lattices appear only for export (`hypersurface.Grid4`), sampled from the callables.
 * **Fundamental versor fields (spec 11.1)** not explored beyond pure-gauge flatness.
-* Phase 6's Lorentz-sector equivalence is kinematic: it verifies that F in the sector is the Riemann bivector map; no GTG dynamical equations were involved.
+* The Lorentz-sector equivalence (spec 9.1) is kinematic: it verifies that F in the sector is the Riemann bivector map; no GTG dynamical equations were involved.
 
 ## Findings about the spec
 
@@ -351,8 +365,8 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
 
 * **Field-strength slice** (`render_slices.png`): the gauge-invariant `<F F~>` on a plane through the hole, agrees with 24M²/r⁶ to 1e-11 down to r≈0.4; it diverges toward the singularity, with the horizon (r=2M) unremarkable in PG coordinates. The translation-sector shift √(2M/r) is shown as a gauge-dependent comparison.
 * **Holonomy map** (`render_holonomy.png`): max |T_loop − 1| for 0.4×0.4 loops of the full conformal connection (coframe + Lorentz), ≈ ε²·curvature, from 1e-4 at r=8 to O(1) at the center.
-* **Ray tracer** (`trace_scene`): a ray's frame momentum k and the camera screen (a map `Direction <- Screen`) are
-  parallel transported by the Lorentz connection, `-Omega(E(k)).commutator(.)`, RK4 with steps 0.03·clip(r, 1, 10)
+* **Ray tracer** (`trace_scene`): a ray's local twistor Z is transported by the normal conformal connection, and its
+  momentum k = momentum(Z) and camera screen (read from the flag, `screen_frame`) follow from it; RK4 with steps 0.03·clip(r, 1, 10)
   backward in the affine parameter, pixels in chunks of 16384 through one compiled `lax.scan`. Rays go on past the disk
   (so the shadow is measured by itself); the first disk crossing is located by cubic Hermite interpolation of the step,
   with the end rates carried in the scan, and two Newton steps on its height. Rays reaching r < 1.1 r_+ are captured
@@ -378,14 +392,15 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   (r 1.58–1.60 against 1.1 r₊ = 1.579), and its last step landed inside the horizon (r 0.63–1.01) across z = 0;
   the cubic Hermite crossing of that step put the crossing at r 4–12, on the disk. A crossing now counts only if the
   step ends outside the capture radius. Re-traced with `rays.py` under both transports, at the render's step and
-  half of it, none of the six crosses the disk: the transport played no part. Polarizer: crossed analyzers pass 1 to 1e-12; one analyzer 0.10–0.90; per disk pixel the brightest over
+  half of it, none of the six crosses the disk: the transport played no part.
+  Polarizer: crossed analyzers pass 1 to 1e-12; one analyzer 0.10–0.90; per disk pixel the brightest over
   darkest frame is 1.6 (median) to 3.7 (90th percentile), a band sweeping round the disk. Its exposure is dimmer
   (factor 0.6 instead of 2) to keep that swing out of the tone curve's roll-off.
 * **Tests** (`tests/test_render.py`, 12×9 scenes): conservation (< 5e-3), screen orthonormal and across the ray
   (< 5e-3), frequency ratio against the conserved quantities (< 5e-3), unit-intensity coherency (1e-12), Page-Thorne.
-* The first versions of the holonomy map and lensing image were wrong (as reported when they were made). Causes: (i) `jax.jit(jax.vmap(holonomy_loop))` returns wrong values for batches of more than about 16 points while `jax.vmap` without `jit`, `jax.lax.map` and single-point calls agree with each other (reproduced with the array and the extensor transport alike; the map now uses `lax.map`); I did not establish whether the fault is in numga, JAX or XLA. (ii) The camera lay in the disk plane, and the horizon speckle above. Later, at r = 30 with a 0.5 rad field the disk overflowed the frame; the camera moved to r = 50 with 0.7 rad.
+* The first versions of the holonomy map and lensing image were wrong (as reported when they were made). Causes: (i) `jax.jit(jax.vmap(holonomy_loop))` returns wrong values for batches of more than about 16 points while `jax.vmap` without `jit`, `jax.lax.map` and single-point calls agree with each other (reproduced with the array and the extensor transport alike; the map now evaluates its loops as one extensor batch); I did not establish whether the fault is in numga, JAX or XLA. (ii) The camera lay in the disk plane, and the horizon speckle above. Later, at r = 30 with a 0.5 rad field the disk overflowed the frame; the camera moved to r = 50 with 0.7 rad.
 * Not done: light-travel delay in the animation; multiple disk crossings (the disk is opaque, nearest crossing only);
-  gas aberration in the polarization; the Schwarzschild image re-traced with the Hermite crossing.
+  gas aberration in the polarization.
 
 ## ParaView export: hypersurfaces of spacetime (`hypersurface.py`, `export.py`)
 

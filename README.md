@@ -30,9 +30,9 @@ pointwise and checks known solutions against them.
   correspondence included), null twistors are light rays, and the normal conformal connection acts on twistors as
   Penrose's local twistor transport: its curvature vanishes for FRW and not for a generic metric. A twistor gives its
   momentum $\pi\bar\pi$ as one product in the algebra, and the null flag of $\pi$ (a direction across the momentum,
-  turned by the twistor's phase) in coordinates. Restricted to the ω half, the twistor trace of $F\tilde F$ is the
-  complex Weyl invariant $\tfrac12(C^2+i\,C{}^*C)$, exactly $24M^2/(r-ia\cos\theta)^6$ for Kerr, and is exported
-  for ParaView.
+  turned by the twistor's phase) as another, through the odd element $e_te_ye_z$ that conjugates twistors.
+  Restricted to the ω half, the twistor trace of $F\tilde F$ is the complex Weyl invariant $\tfrac12(C^2+i\,C{}^*C)$,
+  exactly $24M^2/(r-ia\cos\theta)^6$ for Kerr, and is exported for ParaView.
 - **GTG gauge freedom (11.2):** Schwarzschild's Painlevé–Gullstrand and Kerr–Schild gauges are related by a GTG
   displacement $t\mapsto t+F(r)$ and a radial boost of rapidity $\ln(1+\sqrt{2M/r})$. Together they act on the full
   CSTA connection as a spec gauge transformation, inside the horizon too, and the PG rotation gauge field is Doran and
@@ -77,8 +77,10 @@ pointwise and checks known solutions against them.
   accumulated versor.
 
 Not established: dynamics for the compensators themselves (11.4 is recovered with them fixed, in second- and
-first-order form), a dilation field that is not pure gauge (11.3), and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim with
-its test and tolerance; [DEEP_DIVE.md](DEEP_DIVE.md) explains the construction.
+first-order form); whether the proposal sets the Weyl-squared admixture to zero or keeps it as an effective
+correction; the scalar and vector sectors of the linearization; matter; a dilation field that is not pure gauge
+(11.3); and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim
+with its test and tolerance; [DEEP_DIVE.md](DEEP_DIVE.md) explains the construction.
 
 | Schwarzschild | Kerr, $a=0.9$ |
 |---|---|
@@ -98,9 +100,8 @@ numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's
 ```sh
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
-pytest                                 # 250 tests; 233 of them took about 38 min on an RTX 3060
-pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py tests/test_macdowell_mansouri.py \
-             tests/test_beyond_einstein.py
+pytest                                 # 250 tests
+pytest -m slow                         # 20 more, about 30 min on an RTX 3060
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
 python -m gauge_theory_gravity.examples.render slices holonomy twistor schwarzschild kerr   # schwarzschild and kerr take about an hour each
@@ -117,14 +118,14 @@ returned wrong values on the GPU (see RESULTS.md).
 
 | Path | Contents |
 |---|---|
-| `src/gauge_theory_gravity/algebra.py` | the algebra, null basis, generators, direction and slice types, sector projectors |
+| `src/gauge_theory_gravity/algebra.py` | the algebra, null basis, generators and their reciprocals, direction and slice types, the volume of directions, sector projectors |
 | `fields.py`, `gauge.py`, `covariant.py`, `curvature.py`, `transport.py` | sections 4–8 of the proposal |
 | `cartan.py` | geometries as coframes with closed-form frames (Painlevé–Gullstrand, FRW, de Sitter, lapse, boosted, Kerr–Schild), Christoffel symbols, Lorentz connection |
 | `conformal.py`, `invariants.py`, `sta_embedding.py` | the full conformal connection, normal conditions, Schouten, Weyl squared, the Lorentz sector |
 | `compensator.py` | the scale tractor (infinity twistor) of a scale, its tractor derivative, the integrability test for an Einstein scale |
-| `variation.py` | field equations: the pointwise Euler–Lagrange derivative of a coframe density; Einstein–Hilbert and Weyl-squared densities |
+| `variation.py` | field equations: the pointwise Euler–Lagrange derivative of a coframe density; the determinant as an outermorphism; Einstein–Hilbert, Weyl-squared and compensator densities |
 | `first_order.py` | actions of the full connection with origin and infinity twistor as compensators (first-order Einstein, quadratic MacDowell–Mansouri), and their field equations |
-| `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, SU(2,2) matrices, the complex Weyl invariant |
+| `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, positive size, spectra, SU(2,2) matrices, the complex Weyl invariant |
 | `hypersurface.py` | fields on a 4D coordinate grid, hypersurfaces $x^\mu=c$, their layout and extraction |
 | `export.py` | VTKHDF export of hypersurfaces for ParaView: invariants, sector magnitudes and components |
 | `examples/` | scenarios, renders, disk light, ray paths with extrinsic (versor) or intrinsic (twistor) transport (`rays.py`) |
