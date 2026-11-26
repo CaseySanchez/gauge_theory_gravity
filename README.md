@@ -3,7 +3,7 @@
 This repository holds a proposal for formulating Gauge Theory Gravity (GTG) in the real conformal spacetime algebra
 $\mathrm{Cl}(2,4;\mathbb R)$, and a numerical test-bed that checks it. The proposal is reproduced in full
 [below](#the-proposal-conformal-spacetime-algebra-gauge-theory-of-gravity) (also as
-[a PDF](Gauge_Theory_Gravity_in_Conformal_Spacetime_Algebra.pdf)).
+[a PDF](docs/Gauge_Theory_Gravity_in_Conformal_Spacetime_Algebra.pdf)).
 
 The test-bed, `src/gauge_theory_gravity`, is written on [numga](https://github.com/EelcoHoogendoorn/numga) extensors with JAX
 autodiff. It implements the 15-component bivector connection $\Omega(a,x)$, versor gauge transformations, the covariant
