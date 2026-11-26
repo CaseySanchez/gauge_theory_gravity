@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from .. import algebra as al
+from . import GEN
 
 ETA = jnp.asarray(al.ETA4)
 
@@ -94,7 +95,7 @@ def lorentz_connection_blades(coframe):
         wab = jnp.einsum("mac,cb->mab", w, ETA)           # omega^{ab} (eta^{cb} = eta_cb for diag +-1)
         c = jnp.stack([wab[:, a, b] for a, b in pairs], axis=-1)       # (4, 6)
         full = jnp.concatenate([c, jnp.zeros((4, 9))], axis=-1)
-        return jnp.einsum("ij,mj->mi", jnp.asarray(al.GEN), full)
+        return jnp.einsum("ij,mj->mi", jnp.asarray(GEN), full)
 
     return Om
 

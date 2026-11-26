@@ -6,7 +6,7 @@ Convention fixed once here; all other modules import from this one.
 from __future__ import annotations
 
 import numpy as np
-from numga import Algebra
+from numga import Algebra, stack
 from numga.backend.jax import JaxContext
 
 SIGNATURE = "t+x-y-z-p+n-"
@@ -33,6 +33,7 @@ SECTORS = {"M": slice(0, 6), "P": slice(6, 10), "K": slice(10, 14), "D": slice(1
 
 
 ZERO_B = mv.bivector(np.zeros(15))
+ZERO_S = mv.scalar([0.0])
 
 
 def _kernel(b) -> np.ndarray:
@@ -50,24 +51,34 @@ def generators():
 
 
 GENS = generators()
-# GEN[:, i] = blade coefficients of generator i; blade_coeffs = GEN @ generator_coeffs.
-GEN = np.stack([_kernel(g) for g in GENS], axis=1)
-GEN_INV = np.linalg.inv(GEN)
+GENERATORS = stack(GENS)                                                # [15] Bivector+
+# The reciprocal generators, <G^i G_j>_0 = delta^i_j. The reflection along n exchanges the origin and infinity (up to
+# sign), so it takes each translation P_a to its special-conformal partner K_a and keeps the Lorentz and dilation
+# generators up to sign; paired with the generators it is diagonal, and dividing by that diagonal gives G^i.
+_MIRRORED = n >> GENERATORS                                             # [15] Bivector+
+RECIPROCALS = _MIRRORED / (_MIRRORED * GENERATORS).restrict[0]          # [15] Bivector+
+
+
+def generator_coordinates(b):
+    """The generator coordinates c_i = <G^i B>_0 of a bivector (or of the bivector part of any multivector), along a
+    new last axis of length 15."""
+    return ((RECIPROCALS * b[..., None]).restrict[0] + ZERO_S).kernel[..., 0]
+
+
+def bivector(c_gen):
+    """The bivector sum_i c_i G_i from generator coordinates (..., 15)."""
+    c = CTX.xp.asarray(c_gen, dtype=np.float64)
+    return (mv.scalar(c[..., None]) * GENERATORS).sum(axis=-1).cast(Bivector)
 
 
 def to_blades(c):
     """Generator coordinates (..., 15) -> numga bivector blade coefficients (..., 15)."""
-    return np.einsum("ij,...j->...i", GEN, c)
+    return _kernel(bivector(c))
 
 
 def to_generators(b):
     """numga bivector blade coefficients (..., 15) -> generator coordinates (..., 15)."""
-    return np.einsum("ij,...j->...i", GEN_INV, b)
-
-
-def bivector(c_gen):
-    """numga bivector from generator coordinates."""
-    return mv.bivector(to_blades(np.asarray(c_gen)))
+    return np.asarray(generator_coordinates(mv.bivector(CTX.xp.asarray(b, dtype=np.float64))))
 
 
 def structure_constants() -> np.ndarray:
@@ -75,8 +86,7 @@ def structure_constants() -> np.ndarray:
     f = np.zeros((15, 15, 15))
     for i, gi in enumerate(GENS):
         for j, gj in enumerate(GENS):
-            comm = (gi * gj - gj * gi)
-            f[i, j] = to_generators(_kernel(comm.restrict[2]))
+            f[i, j] = generator_coordinates((gi * gj - gj * gi).restrict[2])
     return f
 
 
@@ -93,7 +103,6 @@ def scalar(a) -> float:
 # them through `slice & direction`.  The conformal origin and infinity are intrinsic points too, while the
 # connection, curvature and versors are extrinsic, as generators and motions are.
 # ---------------------------------------------------------------------------------------------
-from numga import stack  # noqa: E402
 
 CTX = mv.context
 Scalar = ALG.gatype.scalar()                                   # Scalar+
@@ -118,6 +127,19 @@ SLICES = stack([e / scalar(e & d) for e, d in zip(SPACETIME, [t.dual(), x.dual()
 # the metric enters here explicitly rather than through the pairing.
 FLAT_METRIC = (SLICES * np.diag(ETA4) * (SLICES & Direction)).sum(axis=0)   # Slice+ <- Direction-
 time = t.dual()                                                # [] Direction-, squares to +1
+# The unit volume of spacetime directions, their join d_t & d_x & d_y & d_z: the top exterior power of the
+# directions, on which a map of directions acts by its outermorphism as multiplication by its determinant.
+VOLUME = DIRECTIONS[0] & DIRECTIONS[1] & DIRECTIONS[2] & DIRECTIONS[3]   # [] Bivector-, the dual of t ^ x ^ y ^ z
+# The volume read by four slices, (s ^ s ^ s ^ s) & VOLUME, alternating, scaled to 1 on the slices that read
+# d_t, d_x, d_y, d_z in that order.
+_VOLUME_READING = (Slice ^ Slice ^ Slice ^ Slice) & VOLUME                      # Scalar+ <- (Slice+, x4)
+VOLUME_READING = _VOLUME_READING / scalar(_VOLUME_READING(SLICES[0], SLICES[1], SLICES[2], SLICES[3]))
+
+
+def on_volume(form):
+    """A 4-linear map of directions evaluated on VOLUME: each direction input traced against a slice input of the
+    volume's reading, the alternating sum of its values on the coordinate directions without an epsilon symbol."""
+    return (form * VOLUME_READING).trace(1, 5).trace(1, 4).trace(1, 3).trace(1, 2)
 # The conformal origin and the point at infinity as intrinsic points.
 ORIGIN = n_o.dual()                                            # [] Antivector-
 INFINITY = n_inf.dual()                                        # [] Antivector-

@@ -185,12 +185,10 @@ def test_flag_is_null_turns_with_the_phase_and_follows_lorentz_transport():
     the flag direction of Z to that of R Z, as it carries vectors, R s ~R, up to a multiple of the new momentum."""
     momenta = al.point(np.array([[1.0, 0.6, 0.0, 0.8], [2.0, 0, 0, -2.0], [1.0, 0, 0, 1.0], [1.3, 0.5, -1.2, 0.0]]))
     Z = tw.from_momentum(momenta)
-    flag, k = tw.flag(Z), np.asarray(al.coordinates(momenta))
-    lowered = np.einsum("ac,...cd,db->...ab", al.ETA4, flag, al.ETA4)
-    assert np.abs(np.einsum("...ab,...ab->...", flag, lowered)).max() < 1e-14                   # F . F = 0
-    wedge = np.einsum("...ab,...c->...abc", flag, k)
-    wedge = wedge + np.einsum("...abc->...bca", wedge) + np.einsum("...abc->...cab", wedge)
-    assert np.abs(wedge).max() < 1e-14 and np.abs(flag).max() > 0.1                            # k ^ F = 0
+    flag, k = tw.flag(Z), tw.as_vector(momenta)
+    size = lambda value: np.abs(np.asarray(value.kernel)).max()
+    assert size((flag * flag).restrict[0]) < 1e-14                                             # F . F = 0
+    assert size(k ^ flag) < 1e-14 and size(flag) > 0.1                                         # k ^ F = 0
     across = tw.flag_direction(Z, al.time)
     read = lambda value: np.asarray(value.kernel)[..., 0]
     assert np.abs(read(across | across) + 1).max() < 1e-14 and np.abs(read(across | momenta)).max() < 1e-14

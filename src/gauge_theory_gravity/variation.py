@@ -38,14 +38,16 @@ def _number(scalar) -> jax.Array:
     return scalar if isinstance(scalar, float) else scalar.kernel.reshape(-1)[0]
 
 
-def coframe_components(e: Extensor) -> jax.Array:
-    """e^a_mu as an array [a, mu], traceable (unlike `algebra.components`, which leaves JAX)."""
-    return al.coordinates(e(al.DIRECTIONS)).T
+def determinant(e: Extensor) -> Extensor:
+    """det e, from the outermorphism of e on the unit volume of directions: e(d_t & d_x & d_y & d_z) = det(e) times
+    it, read by pairing with the volume's dual. Metric-free, and traceable."""
+    image = e.outermorphism(al.VOLUME.gatype)(al.VOLUME)                       # [] Bivector-
+    return (image & al.VOLUME.dual()) / (al.VOLUME & al.VOLUME.dual())         # [] Scalar
 
 
 def volume(coframe: Coframe, x: Extensor) -> jax.Array:
     """sqrt|det g| = |det e|."""
-    return jnp.abs(jnp.linalg.det(coframe_components(coframe(x))))
+    return jnp.abs(_number(determinant(coframe(x))))
 
 
 def einstein_hilbert(coframe: Coframe, x: Extensor) -> jax.Array:

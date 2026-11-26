@@ -12,6 +12,8 @@ F_M holds no e ^ e term and the action does not contain Einstein-Hilbert. Found 
 So the solutions are not Einstein's: conformally flat FRW solves it. And a Weyl-rescaled Schwarzschild, Bach-flat and
 gauge-equivalent to a solution, does not, because the fixed compensators pick a scale.
 """
+from itertools import permutations
+
 import numpy as np
 import pytest
 
@@ -23,6 +25,10 @@ from test_weyl_rescaling import rescaled
 X_HOLE = [0.3, 1.7, -0.9, 1.1]
 X_LAPSE = [1.3, 0.4, -0.7, 0.9]
 SECTORS = {"M": slice(0, 6), "P": slice(6, 10), "K": slice(10, 14), "D": slice(14, 15)}
+# The Levi-Civita symbol, for the independent index formula below.
+EPSILON = np.zeros((4, 4, 4, 4))
+for _p in permutations(range(4)):
+    EPSILON[_p] = np.linalg.det(np.eye(4)[list(_p)])
 
 
 def normal(geometry):
@@ -49,7 +55,7 @@ def cotton_equation(geometry, x4):
             cotton[:, r, s] = [al.scalar(v | al.SPACETIME[a]) * al.ETA4[a, a] for a in range(4)]
     eta, e = al.ETA4, al.components(geometry(x))
     lowered = np.einsum("dk,krs->drs", eta, cotton)
-    return np.stack([4 * eta[a, a] * eta[b, b] * np.einsum("cd,mnrs,cn,drs->m", fo.EPSILON[a, b], fo.EPSILON,
+    return np.stack([4 * eta[a, a] * eta[b, b] * np.einsum("cd,mnrs,cn,drs->m", EPSILON[a, b], EPSILON,
                                                             eta @ e, lowered) for a, b in al.M_PAIRS])
 
 

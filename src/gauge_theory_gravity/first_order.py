@@ -17,7 +17,6 @@ exactly the normal conformal connections of Einstein metrics, Lambda = -6 / beta
 from __future__ import annotations
 
 from collections.abc import Callable
-from itertools import permutations
 
 import jax
 import jax.numpy as jnp
@@ -35,44 +34,24 @@ GENERATORS = al.GENS
 UNITS = [[g * (al.SLICES[m] & al.Direction) for m in range(4)] for g in GENERATORS]
 
 
-def _levi_civita() -> np.ndarray:
-    eps = np.zeros((4, 4, 4, 4))
-    for p in permutations(range(4)):
-        eps[p] = np.linalg.det(np.eye(4)[list(p)])
-    return eps
+def _top(form: Extensor) -> jax.Array:
+    """The pseudoscalar coefficient of a pseudoscalar-valued 4-form evaluated on the volume of directions."""
+    return al.on_volume(form).kernel.reshape(-1)[0]
 
 
-EPSILON = _levi_civita()
-
-
-def _top(*factors) -> jax.Array:
-    """The pseudoscalar coefficient of a wedge of multivectors."""
-    total = factors[0]
-    for f in factors[1:]:
-        total = total ^ f
-    return total.kernel.reshape(-1)[0]
-
-
-def covariant_points(omega: Extensor) -> tuple[list, list]:
-    """DX(d_mu) and DI(d_mu) for constant X = n_o, I = n_inf: the commutator action of Omega(d_mu)."""
-    dx = [omega(al.DIRECTIONS[m]).commutator(ORIGIN) for m in range(4)]
-    di = [omega(al.DIRECTIONS[m]).commutator(INFINITY) for m in range(4)]
-    return dx, di
+def covariant_points(omega: Extensor) -> tuple[Extensor, Extensor]:
+    """DX and DI for constant X = n_o, I = n_inf: the commutator action of Omega, maps Vector <- Direction."""
+    return omega.commutator(ORIGIN), omega.commutator(INFINITY)
 
 
 def densities(omega: Field, x: Extensor) -> jax.Array:
-    """(S1, S2, S3) at x as components of d^4x: sums over eps^{mu nu rho sigma}, with F(a, b) the curvature."""
-    value = omega(x)
-    strength = curvature(omega)(x)
-    dx, di = covariant_points(value)
-    s1 = s2 = s3 = 0.0
-    for (m, n, r, s) in permutations(range(4)):
-        sign = EPSILON[m, n, r, s]
-        f = strength(al.DIRECTIONS[m], al.DIRECTIONS[n])
-        s1 = s1 + sign * _top(f, dx[r], dx[s], ORIGIN, INFINITY)
-        s2 = s2 + sign * _top(di[m], di[n], dx[r], dx[s], ORIGIN, INFINITY)
-        s3 = s3 + sign * _top(dx[m], dx[n], dx[r], dx[s], ORIGIN, INFINITY)
-    return jnp.stack([s1, s2, s3])
+    """(S1, S2, S3) at x as components of d^4x: each wedge, a 4-form of directions, evaluated on `algebra.VOLUME`."""
+    strength = curvature(omega)(x)                                              # Bivector <- (a, b)
+    dx, di = covariant_points(omega(x))                                         # Vector <- Direction
+    points = ORIGIN ^ INFINITY
+    return jnp.stack([_top(strength ^ dx ^ dx ^ points),
+                      _top(di ^ di ^ dx ^ dx ^ points),
+                      _top(dx ^ dx ^ dx ^ dx ^ points)])
 
 
 def macdowell_mansouri(omega: Field, x: Extensor) -> jax.Array:
@@ -80,11 +59,7 @@ def macdowell_mansouri(omega: Field, x: Extensor) -> jax.Array:
     the conformal group's two compensators. With X = n_o and I = n_inf only the Lorentz sector of F survives, so it is
     Kaku, Townsend and van Nieuwenhuizen's eps_abcd F^ab ^ F^cd."""
     strength = curvature(omega)(x)
-    total = 0.0
-    for (m, n, r, s) in permutations(range(4)):
-        total = total + EPSILON[m, n, r, s] * _top(strength(al.DIRECTIONS[m], al.DIRECTIONS[n]),
-                                                    strength(al.DIRECTIONS[r], al.DIRECTIONS[s]), ORIGIN, INFINITY)
-    return total
+    return _top(strength ^ strength ^ ORIGIN ^ INFINITY)
 
 
 def _moved_connection(omega: Field, alpha, x, amplitude) -> Field:

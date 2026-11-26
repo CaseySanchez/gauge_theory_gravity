@@ -182,7 +182,7 @@ def observables(hole: R.Hole, paths: dict) -> dict[str, np.ndarray]:
     reference = np.abs(np.tile(energy[:rays], records))
     out["energy_drift"] = (energy - np.tile(energy[:rays], records)) / reference
     out["angular_momentum_drift"] = (angular - np.tile(angular[:rays], records)) / reference
-    out["null_residual"] = np.einsum("na,ab,nb->n", out["momentum"], al.ETA4, out["momentum"])
+    out["null_residual"] = np.asarray((momentum | momentum).kernel)[..., 0]
     out |= twistor_observables(flat_twistors)
     if paths["versors"] is not None:
         out |= versor_observables(paths["versors"])
@@ -193,15 +193,17 @@ def twistor_observables(twistors: Extensor) -> dict[str, np.ndarray]:
     """The twistor's coordinates and the diagnostics of its state, per twistor."""
     values = tw.coordinates(twistors)                                                    # [n, 4] complex
     norm = tw.norm(twistors)
-    size = np.sqrt((np.abs(values) ** 2).sum(-1))
-    pi_size = np.sqrt((np.abs(values[:, 2:]) ** 2).sum(-1))
+    read = lambda value: np.asarray(value.kernel)[..., 0]
+    size = read(tw.size(twistors))                                                       # the frame's positive norm
+    pi_size = read(tw.size(tw.pi(twistors)))
+    omega_size = read(tw.size(tw.omega(twistors)))
     amplitude = np.abs(values)
     defined = (amplitude[:, 2:] > 1e-9 * pi_size[:, None]).all(-1)
     phase = np.where(defined, np.angle(values[:, 3] * np.conj(values[:, 2])), 0.0)
     return {"omega_re": values[:, :2].real, "omega_im": values[:, :2].imag,
             "pi_re": values[:, 2:].real, "pi_im": values[:, 2:].imag,
             "amplitude": amplitude, "twistor_norm": norm, "nullity": norm / size ** 2,
-            "incidence": np.sqrt((np.abs(values[:, :2]) ** 2).sum(-1)) / pi_size,
+            "incidence": omega_size / pi_size,
             "relative_phase": phase, "phase_defined": defined.astype(np.uint8)}
 
 

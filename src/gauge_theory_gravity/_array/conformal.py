@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from .. import algebra as al
-from . import to_generators
+from . import GEN, to_generators
 from . import cartan
 from .curvature import curvature
 
@@ -22,7 +22,7 @@ PAIRS = al.M_PAIRS
 def connection(coframe, f_fn=None, b_fn=None):
     """Omega(x): (4,15) blade coefficients. f_fn(x) -> (4,4) with f[a, mu]; b_fn(x) -> (4,)."""
     om = cartan.spin_connection(coframe)
-    GEN = jnp.asarray(al.GEN)
+    gen = jnp.asarray(GEN)
     ETA = cartan.ETA
 
     def Om(x):
@@ -32,7 +32,7 @@ def connection(coframe, f_fn=None, b_fn=None):
         f = jnp.zeros((4, 4)) if f_fn is None else f_fn(x).T           # (mu, a)
         b = jnp.zeros((4, 1)) if b_fn is None else b_fn(x)[:, None]
         c = jnp.concatenate([cM, e, f, b], axis=-1)                    # (4,15)
-        return jnp.einsum("ij,mj->mi", GEN, c)
+        return jnp.einsum("ij,mj->mi", gen, c)
 
     return Om
 

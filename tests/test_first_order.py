@@ -43,8 +43,8 @@ def test_compensators_read_coframe_and_special_conformal_field():
     schouten = cf.schouten(geometry)
     dx, di = fo.covariant_points(cf.connection(geometry, schouten)(x))
     for m in range(4):
-        assert _size(dx[m] - geometry(x)(al.DIRECTIONS[m]).dual_inverse()) < 1e-15
-        assert _size(di[m] - schouten(x)(al.DIRECTIONS[m]).dual_inverse()) < 1e-15
+        assert _size(dx(al.DIRECTIONS[m]) - geometry(x)(al.DIRECTIONS[m]).dual_inverse()) < 1e-15
+        assert _size(di(al.DIRECTIONS[m]) - schouten(x)(al.DIRECTIONS[m]).dual_inverse()) < 1e-15
 
 
 @pytest.mark.parametrize("name,geometry,x4", [

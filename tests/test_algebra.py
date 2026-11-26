@@ -22,7 +22,7 @@ def test_basis_orthogonal():
 
 def test_dimensions():
     assert al.ALG.subspace.bivector().__len__() == 15 if hasattr(al.ALG.subspace.bivector(), "__len__") else True
-    assert al.GEN.shape == (15, 15)
+    assert al.GENERATORS.shape == (15,)
 
 
 def test_null_basis():
@@ -34,8 +34,9 @@ def test_null_basis():
 
 
 def test_generators_span_bivectors():
-    assert np.linalg.matrix_rank(al.GEN) == 15
-    assert abs(np.linalg.det(al.GEN)) > 1e-3
+    """The reciprocal generators exist, <G^i G_j>_0 = delta: so the 15 generators are independent and span."""
+    pairing = np.asarray((al.RECIPROCALS[:, None] * al.GENERATORS[None, :]).restrict[0].kernel)[..., 0]
+    assert np.abs(pairing - np.eye(15)).max() < 1e-14
 
 
 def test_roundtrip_coordinates():

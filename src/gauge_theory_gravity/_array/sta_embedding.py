@@ -5,21 +5,21 @@ import numpy as np
 import jax.numpy as jnp
 
 from .. import algebra as al
-from . import to_generators
+from . import GEN, to_generators
 from .fields import biv
 
 
 def lorentz_connection(omega_ab):
     """Omega_mu from omega^{ab}_mu (shape (4, 6), ordered as M_PAIRS): e=f=b=0."""
     c = jnp.concatenate([jnp.asarray(omega_ab), jnp.zeros((*jnp.shape(omega_ab)[:-1], 9))], axis=-1)
-    return jnp.einsum("ij,...j->...i", jnp.asarray(al.GEN), c)
+    return jnp.einsum("ij,...j->...i", jnp.asarray(GEN), c)
 
 
 def lorentz_rotor_field(B_ab_fn):
     """Return x -> even coefficients (32,) of exp of a spacetime bivector (a Lorentz rotor)."""
     def R(x):
         c = jnp.concatenate([jnp.asarray(B_ab_fn(x)), jnp.zeros(9)])
-        return biv(jnp.einsum("ij,j->i", jnp.asarray(al.GEN), c)).exp().kernel
+        return biv(jnp.einsum("ij,j->i", jnp.asarray(GEN), c)).exp().kernel
     return R
 
 

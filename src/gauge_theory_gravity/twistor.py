@@ -110,6 +110,36 @@ def trace(operator: Extensor) -> Extensor:
     return 4 * (operator.restrict_grade(0) + operator.restrict_grade(6))
 
 
+# The product of the four negative-square directions: h(Z, POSITIVE Z) is the positive-definite Hermitian form of the
+# lab frame, sum |c_k|^2 over the coordinates of BASIS on each half (preserved by S(U(2) x U(2)), not by SU(2,2)).
+POSITIVE = x * y * z * n                                               # [] Even+
+
+
+def size(twistor_: Extensor) -> Extensor:
+    """The frame's positive norm of a twistor, sqrt(h(Z, x y z n Z)): for omega or pi alone, the root of the sum of
+    the squared magnitudes of its two coordinates. The form is clamped at zero, where round-off can take a vanishing
+    half (omega of a twistor through its own event) just below it."""
+    return real_part(inner(twistor_, (POSITIVE * twistor_).cast(Twistor))).clip(0.0, None).square_root()
+
+
+def eigenvalues(operator: Extensor) -> np.ndarray:
+    """The four complex eigenvalues of an even element acting on twistors, along a new last axis: the roots of its
+    characteristic polynomial, whose coefficients follow from the twistor traces of its powers by Newton's identities.
+    NaN where the element is not finite. Clustered eigenvalues lose digits (a fourfold root a quarter of them), so for a
+    versor near 1 take the spectrum of its logarithm."""
+    powers = [operator]
+    for _ in range(3):
+        powers.append(powers[-1] * operator)
+    p1, p2, p3, p4 = (as_complex(trace(power)) for power in powers)
+    e2 = (p1 * p1 - p2) / 2
+    e3 = (e2 * p1 - p1 * p2 + p3) / 3
+    e4 = (e3 * p1 - e2 * p2 + p1 * p3 - p4) / 4
+    polynomials = np.stack([np.ones_like(p1), -p1, e2, -e3, e4], axis=-1)
+    flat = polynomials.reshape(-1, 5)
+    roots = [np.roots(c) if np.isfinite(c).all() else np.full(4, np.nan + 0j) for c in flat]
+    return np.array(roots).reshape(polynomials.shape[:-1] + (4,))
+
+
 def norm(twistor_: Extensor) -> np.ndarray:
     """h(Z, Z), real: zero for a twistor that is a light ray, its sign the sign of the helicity."""
     return as_complex(inner(twistor_, twistor_)).real
@@ -214,10 +244,10 @@ def _event(vector: Extensor) -> Extensor:
 
 
 # --- the null flag of pi ----------------------------------------------------------------------------
-# The Lorentz bivectors e_a ^ e_b keep the omega/pi split; their 2x2 blocks on pi, and the spinor form epsilon_AB.
-_PAIRS = [(a, b) for a in range(4) for b in range(a + 1, 4)]
-_LORENTZ = np.stack([matrix((al.SPACETIME[a] ^ al.SPACETIME[b]).cast(Twistor))[2:, 2:] for a, b in _PAIRS])
-_EPSILON = np.array([[0.0, 1.0], [-1.0, 0.0]])
+# The conjugation of the spinor form: t y z is odd, so it anticommutes with I and turns the Hermitian pairing of pi
+# with its reverse into a bilinear one. n_inf pi C ~pi is the complex bivector epsilon_AB pi^A pi^B: a Lorentz
+# bivector in grade 2 and its I-dual in grade 4.
+CONJUGATION = t * y * z                                                # [] Odd+
 
 
 def with_phase(twistor_: Extensor, angle) -> Extensor:
@@ -227,30 +257,22 @@ def with_phase(twistor_: Extensor, angle) -> Extensor:
     return (turn * twistor_).cast(Twistor)
 
 
-def flag(twistor_: Extensor) -> np.ndarray:
-    """The null flag of pi as the components F^{ab} of a real bivector over the frame (t, x, y, z), along two new last
-    axes: the real part of the self-dual bivector epsilon_AB pi^A pi^B, read against each Lorentz generator e_a ^ e_b.
-    It is k ^ s, with k the momentum and s a unit spacelike direction across the ray fixed up to multiples of k; unlike
-    the momentum it sees the phase of pi (it is quadratic, not Hermitian, in pi), which turns s about k. Not a product
-    in the even subalgebra (I is central there, so no element conjugates a twistor), hence computed in coordinates."""
-    spinor = coordinates(twistor_)[..., 2:]                                              # [..., 2] pi_A
-    paired = np.einsum("...i,ij,gjk,...k->...g", spinor, _EPSILON, _LORENTZ, spinor).real    # [..., 6]
-    components = np.zeros(paired.shape[:-1] + (4, 4))
-    for g, (a, b) in enumerate(_PAIRS):
-        # <(e_a ^ e_b)(e_a ^ e_b)> = -eta_aa eta_bb: the reciprocal generator turns the reading into a component.
-        components[..., a, b] = paired[..., g] / (-al.ETA4[a, a] * al.ETA4[b, b])
-        components[..., b, a] = -components[..., a, b]
-    return components
+def flag(twistor_: Extensor) -> Extensor:
+    """The null flag of pi, a real Lorentz bivector: the real part of the self-dual bivector epsilon_AB pi^A pi^B,
+    the grade-2 part of sqrt(8) n_inf pi C ~pi with C the conjugation t y z. It is k ^ s, with k the momentum and s a
+    unit spacelike direction across the ray fixed up to multiples of k; unlike the momentum it sees the phase of pi (it
+    is quadratic, not Hermitian, in pi), which turns s about k."""
+    spinor = pi(twistor_)
+    return al.sector(np.sqrt(8.0) * (n_inf * spinor * CONJUGATION * ~spinor).restrict[2], "M")   # [...] Bivector+
 
 
 def flag_direction(twistor_: Extensor, observer: Extensor) -> Extensor:
     """The flag's unit direction across the ray that the observer (a timelike frame direction) sees as orthogonal to
     itself: u . F / (u . k), orthogonal to both u and the momentum k. Local twistor transport turns it like the
     parallel transported screen."""
-    u = np.broadcast_to(np.asarray(al.coordinates(observer)), coordinates(twistor_).shape[:-1] + (4,)) @ al.ETA4
-    k = np.asarray(al.coordinates(momentum(twistor_)))
-    across = np.einsum("...a,...ab->...b", u, flag(twistor_)) / (u * k).sum(-1, keepdims=True)
-    return al.point(across / np.sqrt(-np.einsum("...a,ab,...b->...", across, al.ETA4, across))[..., None])
+    u, k = as_vector(observer), as_vector(momentum(twistor_))
+    across = (u * flag(twistor_)).restrict[1] / (u | k)                                  # [...] Vector+
+    return (across / (-(across | across)).square_root()).dual().cast(Direction)        # [...] Direction-
 
 
 # --- the Weyl curvature seen by twistors ----------------------------------------------------------

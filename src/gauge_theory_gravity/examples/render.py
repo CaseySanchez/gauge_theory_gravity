@@ -80,7 +80,7 @@ def slices(half: float = 6.0, n: int = 101) -> None:
     data = export.evaluate_points(COFRAME, plane_points(X, Y, height))
     density = data["riem2_half"].reshape(X.shape)
     curvature_size = data["F_M"].reshape(X.shape)
-    shift = np.linalg.norm(data["shift"][:, 1:], axis=-1).reshape(X.shape)                 # e^i_0, the spatial part
+    shift = np.asarray(cartan.spatial_radius(al.point(data["shift"])).kernel)[..., 0].reshape(X.shape)   # |e^i_0|
     r = np.sqrt(X ** 2 + Y ** 2 + height ** 2)
     print("slices: max |I - 24 M^2/r^6| =", np.abs(density - 24 * M ** 2 / r ** 6).max())
     fig, ax = plt.subplots(1, 3, figsize=(14, 4.2))
@@ -153,16 +153,21 @@ def twistor_holonomy(half: float = 5.0, n: int = 40, size: float = 0.4, steps: i
         return tp.holonomy_loop(connection, starts, 1, 3, size, steps, "magnus4")
 
     corners = centers - 0.5 * size * np.array([0.0, 1.0, 0.0, 1.0])
-    matrices = []
+    spectra, residuals = [], []
     for start in range(0, len(corners), chunk):
         block = corners[start:start + chunk]
         padding = chunk - len(block)
         block = np.concatenate([block, np.repeat(block[-1:], padding, axis=0)]) if padding else block
-        matrices.append(tw.matrix(around(al.point(block[:, None, :])))[:chunk - padding])
-    holonomy = np.concatenate(matrices)                                         # [points, 4, 4] SU(2,2)
-    finite = np.isfinite(holonomy).all(axis=(1, 2))
-    eigenvalues = np.linalg.eigvals(np.where(finite[:, None, None], holonomy, np.eye(4)))
-    logarithms = np.log(eigenvalues)
+        versors = around(al.point(block[:, None, :]))[:chunk - padding]            # [block] Even+
+        # The spectrum of the generator log H, whose eigenvalues are the logarithms: those of H itself cluster near 1,
+        # where the roots of its characteristic polynomial lose a quarter of their digits.
+        spectra.append(tw.eigenvalues(versors.log()))                              # [block, 4] on twistors
+        residuals.append(np.abs(np.asarray((~versors * versors - 1).kernel)).max(axis=-1))   # |~H H - 1|
+    logarithms = np.concatenate(spectra)                                        # [points, 4]
+    unit = np.concatenate(residuals)                                            # [points]
+    finite = np.isfinite(logarithms).all(axis=-1) & np.isfinite(unit)
+    logarithms = np.where(finite[:, None], logarithms, 0.0)
+    eigenvalues = np.exp(logarithms)
     dominant = logarithms[np.arange(len(logarithms)), np.abs(logarithms).argmax(axis=-1)]
     deviation = np.where(finite, np.abs(eigenvalues - 1).max(axis=-1), np.nan).reshape(X.shape)
     boost = np.where(finite, np.degrees(np.arctan2(np.abs(dominant.real), np.abs(dominant.imag))), np.nan).reshape(X.shape)
@@ -186,13 +191,12 @@ def twistor_holonomy(half: float = 5.0, n: int = 40, size: float = 0.4, steps: i
         a.set_xlabel("x"); a.set_ylabel("z")
     fig.suptitle(f"{hole.name}: twistor holonomy on the meridian plane y = 0 (horizon dashed, ring dots)")
     fig.tight_layout(); fig.savefig(OUT / "render_twistor.png", dpi=130); plt.close(fig)
-    unitary = np.abs(np.einsum("pji,jk,pkl->pil", holonomy[finite].conj(), HERMITIAN, holonomy[finite]) - HERMITIAN).max()
+    unitary = unit[finite].max()
     print(f"twistor_holonomy: max |eigenvalue - 1| {np.nanmax(deviation):.3g}, boost fraction "
-          f"{np.nanmin(boost):.1f}..{np.nanmax(boost):.1f} deg, max |H^+ h H - h| {unitary:.1e}, "
+          f"{np.nanmin(boost):.1f}..{np.nanmax(boost):.1f} deg, max |~H H - 1| {unitary:.1e}, "
           f"{(~finite).sum()} loops not finite")
 
 
-HERMITIAN = np.block([[np.zeros((2, 2)), np.eye(2)], [np.eye(2), np.zeros((2, 2))]])   # the twistor norm in coordinates
 
 
 # --- the holes -----------------------------------------------------------------------------------
@@ -326,14 +330,12 @@ def camera_view(hole: Hole, distance: float, field_of_view: float, nx: int, ny: 
     frame = hole.geometry(position)
     observer = frame(al.time)
     observer = observer / (observer | observer).square_root()                  # the static observer's frame velocity
-    # Spatial triad in coordinates (outward, right, up), carried into the frame and orthonormalized there.
-    outward = np.array([np.cos(inclination), 0.0, np.sin(inclination)])
-    right = np.cross([0.0, 0.0, 1.0], outward)
-    right /= np.linalg.norm(right)
-    up = np.cross(outward, right)
+    # Spatial triad (outward, right, up): d_x, d_y, d_z turned up by the inclination in the x-z plane, carried into the
+    # frame and orthonormalized there.
+    tilt = ((al.z ^ al.x) * (-inclination / 2)).exp()                          # [] Rotor+
     triad = []
-    for direction in (outward, right, up):
-        triad.append(orthonormal(frame(al.point([0.0, *direction])), [observer, *triad]))
+    for axis in (1, 2, 3):
+        triad.append(orthonormal(frame((tilt >> al.DIRECTIONS[axis]).cast(Direction)), [observer, *triad]))
     towards, across, upward = triad
     half = np.tan(field_of_view / 2)
     sx = np.linspace(-half, half, nx)
@@ -425,8 +427,8 @@ def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: fl
 
 def sky_directions(hole: Hole, final: State) -> np.ndarray:
     """The unit direction each escaped ray came from: minus the spatial part of its coordinate velocity at the end."""
-    velocity = np.asarray(al.coordinates(hole.geometry.frame(final[0])(tw.momentum(final[1]))))[..., 1:]
-    return -velocity / np.linalg.norm(velocity, axis=-1, keepdims=True)
+    velocity = cartan.SpacePart(hole.geometry.frame(final[0])(tw.momentum(final[1])))   # [...] Direction-
+    return -np.asarray(al.coordinates(velocity / cartan.spatial_radius(velocity)))[..., 1:]
 
 
 # --- the disk --------------------------------------------------------------------------------------
@@ -545,8 +547,8 @@ def sky_light(hole: Hole, scene: dict) -> np.ndarray:
 def twistor_incidence(scene: dict) -> float:
     """How well local twistor transport kept each disk ray's twistor on its ray: the largest |omega| / |pi| at the
     disk, zero while the twistor passes through the ray's current event."""
-    coordinates = tw.coordinates(scene["crossing"][1][scene["hit"]])
-    return float((np.linalg.norm(coordinates[:, :2], axis=-1) / np.linalg.norm(coordinates[:, 2:], axis=-1)).max())
+    twistors = scene["crossing"][1][scene["hit"]]
+    return float(np.asarray((tw.size(tw.omega(twistors)) / tw.size(tw.pi(twistors))).kernel).max())
 
 
 def conservation_error(hole: Hole, scene: dict) -> float:
