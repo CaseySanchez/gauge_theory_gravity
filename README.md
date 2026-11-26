@@ -60,6 +60,9 @@ pointwise and checks known solutions against them.
 - **Quadratic action (11.4, §10):** $\langle F\wedge F\wedge X\wedge I\rangle$ with the same compensators is
   $-\sqrt g\,C^2$ at the normal connection and, varied in the full connection, gives Weyl gravity with a Cotton
   condition, not Einstein: conformally flat FRW solves it.
+- **Beyond Einstein (11.4):** adding the quadratic action keeps every Einstein solution (first and second order).
+  Linearized about flat space, $\sqrt g\,R$ gives $-2k^2$ and $\sqrt g\,C^2$ gives $4k^4$ on transverse-traceless waves,
+  so a Weyl-squared admixture adds Stelle's massive spin-2 ghost; with no admixture the theory is general relativity.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
@@ -95,8 +98,9 @@ numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's
 ```sh
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
-pytest                                 # 248 tests; 233 of them took about 38 min on an RTX 3060
-pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py tests/test_macdowell_mansouri.py
+pytest                                 # 250 tests; 233 of them took about 38 min on an RTX 3060
+pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py tests/test_macdowell_mansouri.py \
+             tests/test_beyond_einstein.py
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
 python -m gauge_theory_gravity.examples.render slices holonomy twistor schwarzschild kerr   # schwarzschild and kerr take about an hour each

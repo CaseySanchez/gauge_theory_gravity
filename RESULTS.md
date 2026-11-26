@@ -305,9 +305,32 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   <DI ^ DI ^ DX ^ DX ^ X ^ I>, of the first-order action above. Not checked: whether every Cotton-free solution of
   the coframe equation is Bach-flat, and mixtures of the two actions.
 
+## Adding the quadratic action: same Einstein solutions, plus a ghost (plan for 11.4, phase 4; `tests/test_beyond_einstein.py`)
+
+* **First order.** S1 + beta S2 + gamma S3 + mu <F^F^X^I>: along the trial family (Levi-Civita, e, f = k e), fitted on
+  Schwarzschild and de Sitter at mu = 0, 0.5, 1 (residual 1e-14), Einstein metrics still solve it, with
+  k = (1 - 4 mu gamma) / beta and Lambda = 6 (gamma - k) unchanged. Checked: Schwarzschild at mu = 0.5, beta = 2,
+  gamma = 1/4 and (slow) de Sitter at mu = 1, beta = -3, gamma = 5/8, to 1e-13. The quadratic term only shifts the
+  special-conformal field.
+* **Second order.** With alpha sqrt(g) C^2 added to the compensator action, Einstein metrics still solve it (Bach-flat,
+  phase 1), and so does the Weyl-rescaled Schwarzschild with its scale: the Weyl-squared equations vanish on it to
+  1e-13 (slow), since sqrt(g) C^2 is Weyl-invariant.
+* **Linearized modes about flat space** (slow). A transverse-traceless plane wave e = 1 + eps H cos(k.x), H = "plus"
+  along z, central difference eps = 1e-4 at x = 0: sqrt(g) R gives -2 k^2 H (1e-8) and sqrt(g) C^2 gives 4 k^4 H
+  (1e-6), k^2 = omega^2 - q^2; null waves give zero for both. So the compensator action (Einstein-Hilbert coefficient
+  -1/12) plus alpha C^2 has L = (k^2/6)(1 + 24 alpha k^2) and propagator 6 [1/k^2 - 1/(k^2 - m^2)],
+  m^2 = -1/(24 alpha): a massive spin-2 mode with the residue opposite to the graviton's, Stelle's ghost, non-tachyonic
+  only for alpha < 0. The scale adds no mode (its equation is the trace of the coframe equation), so the compensator
+  does not remove it.
+* For 11.4: with alpha = 0 (second order) the CSTA theory is general relativity; any Weyl-squared admixture, which
+  the section 10 density would suggest, adds the massive ghost and keeps Einstein metrics as solutions. Whether the
+  proposal intends alpha = 0, or treats the quadratic term as an effective correction below m, is a choice the
+  proposal has to make. Only the TT sector was linearized; the scalar and vector sectors, and the first-order action's
+  linearization, were not.
+
 ## Not done / not established (be careful when citing)
 
-* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the compensator action) and in first-order form (the full connection varied, sections above), but with the compensators fixed (the scale, or X = n_o and I = n_inf); their own dynamics, matter couplings and any Weyl^2 admixture were not attempted.
+* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the compensator action) and in first-order form (the full connection varied, sections above), but with the compensators fixed (the scale, or X = n_o and I = n_inf); their own dynamics and matter couplings were not attempted. A Weyl^2 admixture keeps the Einstein solutions and adds a massive spin-2 ghost (section above).
 * **Displacement gauge field of GTG.** For Kerr-Schild Kerr (and so Schwarzschild at a = 0) the CSTA's translation and
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
