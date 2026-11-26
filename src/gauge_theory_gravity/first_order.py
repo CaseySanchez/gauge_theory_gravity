@@ -75,6 +75,18 @@ def densities(omega: Field, x: Extensor) -> jax.Array:
     return jnp.stack([s1, s2, s3])
 
 
+def macdowell_mansouri(omega: Field, x: Extensor) -> jax.Array:
+    """<F ^ F ^ X ^ I> at x as a component of d^4x: the action quadratic in curvature, MacDowell-Mansouri's form with
+    the conformal group's two compensators. With X = n_o and I = n_inf only the Lorentz sector of F survives, so it is
+    Kaku, Townsend and van Nieuwenhuizen's eps_abcd F^ab ^ F^cd."""
+    strength = curvature(omega)(x)
+    total = 0.0
+    for (m, n, r, s) in permutations(range(4)):
+        total = total + EPSILON[m, n, r, s] * _top(strength(al.DIRECTIONS[m], al.DIRECTIONS[n]),
+                                                    strength(al.DIRECTIONS[r], al.DIRECTIONS[s]), ORIGIN, INFINITY)
+    return total
+
+
 def _moved_connection(omega: Field, alpha, x, amplitude) -> Field:
     def moved(y: Extensor) -> Extensor:
         weight = _monomial(y - x, alpha)
@@ -83,8 +95,8 @@ def _moved_connection(omega: Field, alpha, x, amplitude) -> Field:
     return moved
 
 
-def euler_lagrange_connection(omega: Field, x4) -> np.ndarray:
-    """delta S_i / delta Omega^k_mu for the three densities: an array [3, 15, 4] (generator k in `algebra.LABELS`
-    order, coordinate mu).  The densities are first order in Omega."""
-    return _euler(lambda alpha, x, amplitude: densities(_moved_connection(omega, alpha, x, amplitude), x),
+def euler_lagrange_connection(omega: Field, x4, density: Callable = densities) -> np.ndarray:
+    """delta S / delta Omega^k_mu: an array [..., 15, 4] (generator k in `algebra.LABELS` order, coordinate mu), for
+    `densities` (the three terms, [3, 15, 4]) or `macdowell_mansouri` ([15, 4]).  Both are first order in Omega."""
+    return _euler(lambda alpha, x, amplitude: density(_moved_connection(omega, alpha, x, amplitude), x),
                   (15, 4), x4, order=1)
