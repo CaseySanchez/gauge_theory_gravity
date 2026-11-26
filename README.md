@@ -57,6 +57,9 @@ pointwise and checks known solutions against them.
   DX\wedge DX\wedge X\wedge I\rangle+\gamma\langle (DX)^4\wedge X\wedge I\rangle$ gives a torsion-free Lorentz sector,
   an algebraic special-conformal field and Einstein's equations with $\Lambda=6(\gamma-1/\beta)$; with $\gamma=0$ the
   solutions are exactly the normal conformal connections of Einstein metrics. The dilation field drops out.
+- **Quadratic action (11.4, §10):** $\langle F\wedge F\wedge X\wedge I\rangle$ with the same compensators is
+  $-\sqrt g\,C^2$ at the normal connection and, varied in the full connection, gives Weyl gravity with a Cotton
+  condition, not Einstein: conformally flat FRW solves it.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
@@ -92,8 +95,8 @@ numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's
 ```sh
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
-pytest                                 # 242 tests; 233 of them took about 38 min on an RTX 3060
-pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py   # grids; transport; Bach; Einstein
+pytest                                 # 248 tests; 233 of them took about 38 min on an RTX 3060
+pytest -m slow tests/test_export.py tests/test_rays.py tests/test_variation.py tests/test_compensator_action.py tests/test_macdowell_mansouri.py
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
 python -m gauge_theory_gravity.examples.render slices holonomy twistor schwarzschild kerr   # schwarzschild and kerr take about an hour each
@@ -116,7 +119,7 @@ returned wrong values on the GPU (see RESULTS.md).
 | `conformal.py`, `invariants.py`, `sta_embedding.py` | the full conformal connection, normal conditions, Schouten, Weyl squared, the Lorentz sector |
 | `compensator.py` | the scale tractor (infinity twistor) of a scale, its tractor derivative, the integrability test for an Einstein scale |
 | `variation.py` | field equations: the pointwise Euler–Lagrange derivative of a coframe density; Einstein–Hilbert and Weyl-squared densities |
-| `first_order.py` | the first-order action of the full connection with origin and infinity twistor as compensators, and its field equations |
+| `first_order.py` | actions of the full connection with origin and infinity twistor as compensators (first-order Einstein, quadratic MacDowell–Mansouri), and their field equations |
 | `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, SU(2,2) matrices, the complex Weyl invariant |
 | `hypersurface.py` | fields on a 4D coordinate grid, hypersurfaces $x^\mu=c$, their layout and extraction |
 | `export.py` | VTKHDF export of hypersurfaces for ParaView: invariants, sector magnitudes and components |

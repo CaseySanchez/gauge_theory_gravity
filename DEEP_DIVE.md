@@ -664,7 +664,9 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
   second-order form. In first-order form (`first_order.py`), with the origin $n_o$ and the infinity twistor $n_\infty$
   as compensators, the action $\langle F\,DX\,DX\,X\,I\rangle+\beta\langle DI\,DI\,DX\,DX\,X\,I\rangle+
   \gamma\langle (DX)^4X\,I\rangle$ varied in the full connection gives Einstein's equations with
-  $\Lambda=6(\gamma-1/\beta)$, and at $\gamma=0$ its solutions are the normal connections of Einstein metrics.
+  $\Lambda=6(\gamma-1/\beta)$, and at $\gamma=0$ its solutions are the normal connections of Einstein metrics. The
+  quadratic action $\langle F\wedge F\wedge X\wedge I\rangle$, by contrast, is $-\sqrt g\,C^2$ at the normal
+  connection and gives Weyl gravity (FRW solves it) with a Cotton condition from its Lorentz equation.
 - **The GTG displacement field (§9.2, §11.2).** The translation sector is identified with an orthonormal coframe of a
   torsion-free metric. Whether that is a faithful reading of Doran and Lasenby's $h(a)$, with its fiducial flat
   background, is not tested in general. For Schwarzschild, GTG's two gauge freedoms (a displacement and a rotation)

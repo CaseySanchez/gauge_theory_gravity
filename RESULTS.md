@@ -284,9 +284,30 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   rather than dynamical; making them dynamical fields, and the physical meaning of the sign and size of beta, are
   not examined.
 
+## The action quadratic in curvature: Weyl gravity, not Einstein (plan for 11.4, phase 3B; `tests/test_macdowell_mansouri.py`)
+
+* `first_order.macdowell_mansouri` is <F ^ F ^ X ^ I> with the same compensators X = n_o, I = n_inf. Only the Lorentz
+  sector of F survives (Kaku-Townsend-van Nieuwenhuizen's eps_abcd F^ab F^cd). In the conformal algebra [P, P] = 0, so
+  unlike de Sitter MacDowell-Mansouri, F_M has an e ^ f term but no e ^ e term, and no Einstein-Hilbert term arises.
+* **Density.** At the normal connection it is -sqrt(g) C^2 to 1e-13 on the static lapse, Schwarzschild and Kerr: minus
+  the Weyl-squared action, i.e. the section 10 density.
+* **Field equations (all 60 components of Omega).** The special-conformal equation holds at the normal connection
+  even off shell (lapse, 1e-14), so it forces f = Schouten. The Lorentz equation is exactly 4 eps_abcd e^c ^ F_K^d
+  (fitted, then 1e-14 on the lapse and 1e-13 on a rescaled Schwarzschild), where F_K = D P is the Cotton 2-form: it
+  requires the metric to be Cotton-free (divergence-free Weyl tensor) in the scale the compensators fix. The dilation
+  equation is identically zero: b drops out.
+* **Solutions.** The normal connections of Schwarzschild, FRW, and (slow) Kerr and de Sitter solve all equations to
+  1e-13. FRW is not Einstein, so the theory is not general relativity. With f = 0, FRW does not solve it (slow).
+  A Weyl-rescaled Schwarzschild, Bach-flat and gauge-equivalent to Schwarzschild's normal connection, does not solve
+  it (slow): its Cotton tensor is nonzero, so the fixed compensators break the Weyl invariance of Weyl gravity.
+* So proposal section 10's symmetry breaking by this split gives Weyl gravity (with a Cotton condition from the
+  first-order Lorentz equation), not Einstein. Einstein needs the term quadratic in the special-conformal field,
+  <DI ^ DI ^ DX ^ DX ^ X ^ I>, of the first-order action above. Not checked: whether every Cotton-free solution of
+  the coframe equation is Bach-flat, and mixtures of the two actions.
+
 ## Not done / not established (be careful when citing)
 
-* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the compensator action) and in first-order form (the full connection varied, sections above), but with the compensators fixed (the scale, or X = n_o and I = n_inf); their own dynamics, the MacDowell-Mansouri form, matter couplings and any Weyl^2 admixture were not attempted.
+* **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the compensator action) and in first-order form (the full connection varied, sections above), but with the compensators fixed (the scale, or X = n_o and I = n_inf); their own dynamics, matter couplings and any Weyl^2 admixture were not attempted.
 * **Displacement gauge field of GTG.** For Kerr-Schild Kerr (and so Schwarzschild at a = 0) the CSTA's translation and
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
