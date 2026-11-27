@@ -143,3 +143,13 @@ RESULTS.md (claims, tests, tolerances), DEEP_DIVE §11, the LaTeX formulation (a
   - K: zero with the Lorentz coupling. With the full transport `|det e| E^μ_b C^b_a`, where C is the
     special-conformal current: its symmetric part is `(√2/4)σ η`, and the antisymmetric part is the tensor bilinear.
   - D: zero under both.
+- Phase 5: done (`tests/test_spin_torsion.py`, 9 tests). The action is `S₁ + βS₂ + γS₃ + 4κ|det e|L_D`, which is
+  LDG's `det(h)⁻¹(½R − κL_D)` times −4.
+  - Levi-Civita plus LDG's contorsion `Ω(d_μ) += ½κ g_μ·S` (4.41, 4.53) solves the Lorentz rows exactly (1e-12), on PG
+    and Kerr, under both transports. The opposite sign misses by more than 1.
+  - The torsion is the spin density: `T(a,b) = −n_o⌋F_P(a,b) = κ(a∧b)·S` on the frame (LDG 4.37). It is traceless, so
+    the spinor equation is minimally coupled (the consistency loop, 4.32–4.35).
+  - Beyond GTG (full transport): `S₂ = −2√g((tr F)² − F^a_b F^b_a)` with `F = f e⁻¹`, and the special-conformal
+    equation `12δ − 4β tr F δ + 4β Fᵀ + 4κC = 0` is solved exactly by
+    `F^b_a = (1/β)(1 + κ tr C/3)δ^b_a − (κ/β)C^b_a`, with `tr C = √2σ`. So the Dirac field shifts f away from e/β by
+    ψ̄ψ and by the tensor bilinear, and through f it shifts the compensator mass, giving a `(ψ̄ψ)²` contact term.
