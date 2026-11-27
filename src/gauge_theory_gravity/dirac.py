@@ -205,3 +205,58 @@ def spinor_equation(omega, spinor, x: Extensor, mass: float = 0.0, which: str = 
     elif which != "lorentz":
         raise ValueError(f"connection must be one of {CONNECTIONS}")
     return equation.cast(Twistor)
+
+
+# --- phase 4: the matter sources of the gravitational equations ----------------------------------------------------
+STA_PSEUDOSCALAR = SPACETIME[0] * SPACETIME[1] * SPACETIME[2] * SPACETIME[3]      # [] Pseudoscalar of t, x, y, z
+RECIPROCAL_FRAME = [e * s for e, s in zip(SPACETIME, SQUARES)]                     # e^a
+
+
+def spin_trivector(spinor: Extensor) -> Extensor:
+    """S = 1/2 psi I gamma_3 ~psi = -1/2 I_sta A, A = A_a e^a the axial current (Lasenby, Doran and Gull's 4.34). The
+    Lorentz rows of the connection equation are |det e| S . g^mu, g^mu = E^mu_a e^a: their spin tensor S . h_bar(a)."""
+    axial = current_vector(axial_current(spinor))
+    return (-0.5 * (STA_PSEUDOSCALAR * axial)).restrict_grade(3)
+
+
+def current_vector(components: Extensor) -> Extensor:
+    """sum_a c_a e^a from frame components along the last axis (lowered index)."""
+    return sum((components[..., a] * RECIPROCAL_FRAME[a] for a in range(4)), 0 * SPACETIME[0])
+
+
+def reciprocal_coordinate_frame(connection: Extensor) -> list[Extensor]:
+    """[4] vectors g^mu = E^mu_a e^a, the reciprocal of g_mu = e(d_mu): Lasenby, Doran and Gull's h_bar(e^mu)."""
+    frame = frame_at(connection)                                                       # [4] Direction, E_a
+    readings = al.SLICES[:, None] & frame[None, :]                                     # [mu, a] Scalar, E^mu_a
+    return [sum((readings[mu, a] * RECIPROCAL_FRAME[a] for a in range(4)), 0 * SPACETIME[0]) for mu in range(4)]
+
+
+def _stress_transport(connection: Extensor, which: str) -> Extensor:
+    """The transport that the stress-energy sees: under the full transport, every sector but the translations, whose
+    action on the spinor, 1/2 Gamma^a e(E_a) ^ n_inf, does not depend on the coframe."""
+    if which == "full":
+        return connection - al.sector(connection, "P")
+    return transport_part(connection, which)
+
+
+def stress_energy(omega, spinor, x: Extensor, mass: float = 0.0, which: str = "full") -> Extensor:
+    """T^b_a = Re h(Z, I Gamma^b D_{E_a} Z) - delta^b_a L, a [4 a, 4 b] array of scalars, L the Lagrangian of `density`
+    without the volume: Lasenby, Doran and Gull's T(a) = <a.D psi I gamma_3 ~psi>_1 - a L (4.20) in the frame. The
+    translation rows of the connection equation are -|det e| E^mu_b T^b_a."""
+    connection = omega(x)
+    frame = frame_at(connection)
+    Z = spinor(x)
+    covariant = derivative(spinor)(x)(frame) + 0.5 * (_stress_transport(connection, which)(frame) * Z)   # [4] D_{E_a} Z
+    kinetic = tw.real_part(bar(Z, act(I * GAMMA_UP[None, :], covariant[:, None].cast(Twistor))))           # [a, b]
+    lagrangian = density(omega, spinor, x, mass, which) / jnp.abs(_number(determinant(coframe_of(connection))))
+    return kinetic - lagrangian * np.eye(4)
+
+
+SPECIAL_GENERATORS = stack([(e ^ ORIGIN).cast(al.Even) for e in SPACETIME])          # [4] Even, K_a
+
+
+def special_conformal_current(spinor: Extensor) -> Extensor:
+    """C^b_a = Re h(Z, 1/2 I Gamma^b K_a Z), [4 a, 4 b]: what the special-conformal rows of the connection equation
+    receive under the full transport, |det e| E^mu_b C^b_a. Its symmetric part (lowered) is (sqrt 2 / 4) sigma eta, the
+    rest the tensor bilinear bar(psi) sigma_ab (1 - gamma_5) psi."""
+    return tw.real_part(bar(spinor, act(0.5 * I * GAMMA_UP[None, :] * SPECIAL_GENERATORS[:, None], spinor)))

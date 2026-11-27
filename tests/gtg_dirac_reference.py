@@ -207,3 +207,22 @@ def spin_trivector(spinor, x4):
     """S = 1/2 psi I gamma_3 ~psi (4.34)."""
     psi = even(spinor(jnp.asarray(x4, dtype=jnp.float64)))
     return 0.5 * psi * I_STA * GAMMA[3] * ~psi
+
+
+def coframe_derivative(coframe, rotation_kernels, spinor, x4, mass: float = 0.0) -> np.ndarray:
+    """d(det(h)^-1 L) / d e[a, mu] at fixed Omega_mu and psi, by jax: the h-equation's matter term (4.16, 4.20) in the
+    coframe components."""
+    x4 = jnp.asarray(x4, dtype=jnp.float64)
+    psi, d_psi, Om_k = spinor(x4), jax.jacfwd(spinor)(x4), rotation_kernels(x4)
+
+    def local(e):
+        E = jnp.linalg.inv(e) * jnp.asarray(ETA)[None, :]
+        P = even(psi)
+        kinetic = 0.0
+        for mu in range(4):
+            g = sum((E[mu, a] * GAMMA[a] for a in range(4)), 0 * GAMMA[0])
+            covariant = even(d_psi[:, mu]) + 0.5 * (mv.bivector(Om_k[mu]) * P)
+            kinetic = kinetic + (g * covariant * I_STA * GAMMA[3] * ~P).restrict_grade(0).kernel.reshape(())
+        return jnp.abs(jnp.linalg.det(e)) * (kinetic - mass * (P * ~P).restrict_grade(0).kernel.reshape(()))
+
+    return np.asarray(jax.grad(local)(coframe(x4)))

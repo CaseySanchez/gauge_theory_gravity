@@ -132,3 +132,14 @@ RESULTS.md (claims, tests, tolerances), DEEP_DIVE §11, the LaTeX formulation (a
   - Full transport: W gains `½(O + Õ)Z`, the h-Hermitian part (the reverse is the h-adjoint) of
     `O = ½ I Γ^a (Ω − Ω_M)(E_a)`. Exact for general f (antisymmetric part included), b with curl, and torsion. For
     `f = k e` it is the compensator mass `√2(1 + k) Z`.
+- Phase 4: done (`dirac.spin_trivector`, `stress_energy`, `special_conformal_current`,
+  `reciprocal_coordinate_frame`; `tests/test_dirac_sources.py`, 10 tests). The Dirac part of `δS/δΩ^k_μ`, sector by
+  sector, on Kerr with torsion, general f and b with curl:
+  - M (spin): `|det e| S·g^μ`, with `S = ½ψIγ₃ψ̃ = −½ I_sta A` and `g^μ = h̄(e^μ)`. This is LDG's spin tensor
+    `S(a) = S·h̄(a)` (4.27, 4.37). The native S equals the oracle's, and the rows are the same under both transports.
+  - P (stress-energy): with the Lorentz coupling, the oracle's `∂(det(h)⁻¹L)/∂e` (4.16, 4.20). In closed form
+    `−|det e| E^μ_b T^b_a`, with `T(a) = ⟨a·Dψ Iγ₃ψ̃⟩₁ − aL`. Under the full transport D omits the P sector (its
+    action `½Γ^a e(E_a)∧n_inf` does not depend on e) and L carries the compensator terms.
+  - K: zero with the Lorentz coupling. With the full transport `|det e| E^μ_b C^b_a`, where C is the
+    special-conformal current: its symmetric part is `(√2/4)σ η`, and the antisymmetric part is the tensor bilinear.
+  - D: zero under both.
