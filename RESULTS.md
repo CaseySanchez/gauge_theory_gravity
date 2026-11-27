@@ -3,7 +3,7 @@
 All checks below are executable: `source .venv/bin/activate && pytest` (250 tests), plus 20 slow tests, `pytest -m slow`
 (about 30 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
 `test_macdowell_mansouri.py` and `test_beyond_einstein.py`. Demos:
-`cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about an hour each at 480×360 on an RTX 3060).
+`cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about 2.5 hours each at 640×360 with 2×2 rays per pixel on an RTX 3060).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
 ## Implementation: extensors, with an independent array reference
@@ -378,15 +378,15 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   shown as tone-mapped blackbody color over a star field. Polarization: numga's model, emission polarized across a
   toroidal field in the local frame (gas aberration left out), as a unit-intensity coherency `Screen <- ScreenSlice` on
   the transported screen, read by a rotating analyzer slice.
-* **Schwarzschild** (`render_schwarzschild.png`, `.gif`; 480×360, camera at r = 50 M, 20° above the disk, field 1.0 rad):
-  shadow angular radius 0.1018 rad against the analytic 0.1020 (static observer, sin α = (3√3 M/D)√(1−2M/D)), 0.2% low
-  (it was 0.1670 vs 0.1681 at r = 30, 160×120). Frequency ratio on the disk 0.49–1.35, observed temperature up to
-  4580 K. Photon energy k·∂t and angular momentum k·∂φ change by at most 1.1e-6 from camera to disk; at the disk
-  |ω|/|π| < 3e-15. The GIF shades the same trace
+* **Schwarzschild** (`render_schwarzschild.png`, `.gif`; 640×360 from a 1280×720 trace averaged 2×2, camera at r = 50 M,
+  20° above the disk, field 1.0 rad): shadow angular radius 0.1019 rad against the analytic 0.1020 (static observer, sin α = (3√3 M/D)√(1−2M/D)), 0.1% low
+  (0.1018 at 480×360; 0.1670 vs 0.1681 at r = 30, 160×120). Frequency ratio on the disk 0.49–1.35, observed temperature up to
+  4580 K. Photon energy k·∂t and angular momentum k·∂φ change by at most 1.2e-6 from camera to disk; at the disk
+  |ω|/|π| < 5e-15. The GIF shades the same trace
   with a two-armed pattern riding the Kepler flow (no light-travel delay).
-* **Kerr a = 0.9** (`render_kerr.png`, `.gif`; 480×360, 15° above the disk): D-shaped shadow flattened
-  on the approaching side, disk down to 2.32 M, frequency ratio up to 1.41, observed temperature up to 11137 K,
-  |ω|/|π| < 2.4e-15 at the disk, k·∂t and k·∂φ conserved camera to disk to 2.6e-4, frequency ratio 0.185–1.409.
+* **Kerr a = 0.9** (`render_kerr.png`, `.gif`; 640×360 from a 1280×720 trace averaged 2×2, 15° above the disk): D-shaped shadow flattened
+  on the approaching side, disk down to 2.32 M, frequency ratio up to 1.41, observed temperature up to 11141 K,
+  |ω|/|π| < 4.1e-15 at the disk, k·∂t and k·∂φ conserved camera to disk to 2.8e-4, frequency ratio 0.183–1.409.
   **Fixed defect:** six captured rays on the receding edge of the shadow were shaded as disk, with k·∂t and k·∂φ
   changed by up to 2.8e4 and frequency ratio 0.000 (a red speckle). Each reached just above the capture radius
   (r 1.58–1.60 against 1.1 r₊ = 1.579), and its last step landed inside the horizon (r 0.63–1.01) across z = 0;

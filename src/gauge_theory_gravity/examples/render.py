@@ -55,6 +55,25 @@ ScreenFrame = al.ALG.gatype((Direction, Screen))                  # Direction- <
 # The light's polarization covariance, from the slices that read the screen to screen directions.
 Coherency = al.ALG.gatype((Screen, ScreenSlice))                  # Screen- <- ScreenSlice+
 State = tuple[Extensor, Extensor]                                 # (event, local twistor)
+# Rays per batch, for the trace and every per-ray evaluation: a product of twistors over a whole image of millions of
+# rays needs tens of GiB of GPU memory at once.
+CHUNK = 16384
+
+
+def batched(function: Callable, *values, chunk: int = CHUNK):
+    """`function` of per-ray values (extensors or arrays, rays along the first axis), evaluated `chunk` rays at a time
+    and joined back along the first axis. It returns an extensor, an array, or a tuple of them."""
+    count = values[0].shape[0]
+    pieces = [function(*(value[begin:begin + chunk] for value in values)) for begin in range(0, count, chunk)]
+
+    def join(parts):
+        if isinstance(parts[0], tuple):
+            return tuple(join([part[k] for part in parts]) for k in range(len(parts[0])))
+        if isinstance(parts[0], Extensor):
+            return concatenate(parts)
+        return np.concatenate([np.asarray(part) for part in parts])
+
+    return join(pieces)
 
 
 # --- field-strength slice and holonomy map ---------------------------------------------------------
@@ -307,14 +326,15 @@ def orthonormal(vector: Extensor, previous: list[Extensor]) -> Extensor:
 
 
 def static_camera(hole: Hole, distance: float, field_of_view: float, nx: int, ny: int,
-                  inclination: float = np.radians(20.0)) -> tuple[State, float]:
+                  inclination: float = np.radians(20.0), pixels: np.ndarray | None = None) -> tuple[State, float]:
     """Initial state for every pixel: a static observer at `distance`, `inclination` above the disk plane (z = 0),
     looking at the hole. The ray's local twistor passes through the camera's event (omega = 0) with the arriving
     photon's frame momentum, `k = u - n` for the unit direction n the pixel looks along, so that `k | u = 1`, traced
     backward with a negative step; its phase sets its flag along the camera's right, made orthogonal to the pixel's ray,
     so that `screen_frame` reads the screen's x and y as the camera's right and up. Also returns the image plane's
-    half-width."""
-    events, momentum, right_axis, up_axis, half = camera_view(hole, distance, field_of_view, nx, ny, inclination)
+    half-width. `pixels`, flat indices into the nx x ny image, selects the rays to set up (all by default)."""
+    events, momentum, right_axis, up_axis, half = camera_view(hole, distance, field_of_view, nx, ny, inclination,
+                                                              pixels)
     twistor = tw.from_momentum(momentum)                                        # [pixels] the ray's local twistor
     # A phase turns the flag by twice itself about k; turn each one from where it lies onto the camera's right.
     across = tw.flag_direction(twistor, al.time)
@@ -323,9 +343,11 @@ def static_camera(hole: Hole, distance: float, field_of_view: float, nx: int, ny
 
 
 def camera_view(hole: Hole, distance: float, field_of_view: float, nx: int, ny: int,
-                inclination: float = np.radians(20.0)) -> tuple[Extensor, Extensor, Extensor, Extensor, float]:
+                inclination: float = np.radians(20.0), pixels: np.ndarray | None = None
+                ) -> tuple[Extensor, Extensor, Extensor, Extensor, float]:
     """Each pixel's camera event, frame momentum `k = u - n` and the camera's right and up made orthogonal to the
-    pixel's ray (unit Directions, screen x and y), with the image plane's half-width; see `static_camera`."""
+    pixel's ray (unit Directions, screen x and y), with the image plane's half-width; see `static_camera`. `pixels`
+    selects pixels by flat index (all by default)."""
     position = al.point([0.0, distance * np.cos(inclination), 0.0, distance * np.sin(inclination)])
     frame = hole.geometry(position)
     observer = frame(al.time)
@@ -340,8 +362,10 @@ def camera_view(hole: Hole, distance: float, field_of_view: float, nx: int, ny: 
     half = np.tan(field_of_view / 2)
     sx = np.linspace(-half, half, nx)
     sy = np.linspace(-half * ny / nx, half * ny / nx, ny)
-    SX, SY = np.meshgrid(sx, sy)
-    looking = -towards + al.mv.scalar(SX.reshape(-1, 1)) * across + al.mv.scalar(SY.reshape(-1, 1)) * upward
+    SX, SY = (grid.reshape(-1, 1) for grid in np.meshgrid(sx, sy))
+    if pixels is not None:
+        SX, SY = SX[pixels], SY[pixels]
+    looking = -towards + al.mv.scalar(SX) * across + al.mv.scalar(SY) * upward
     looking = looking / (-(looking | looking)).square_root()                    # [pixels] unit spatial direction
     momentum = (observer - looking).cast(Direction)                             # [pixels] the photon's frame momentum
     right_axis = orthonormal(across, [observer, looking])                       # [pixels] Direction-
@@ -369,17 +393,17 @@ def readout(state: State) -> tuple[Extensor, Extensor, Extensor]:
 
 
 def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: float, steps: int, r_in: float,
-                r_out: float, inclination: float, chunk: int = 16384, base_step: float = 0.03) -> dict:
+                r_out: float, inclination: float, chunk: int = CHUNK, base_step: float = 0.03) -> dict:
     """Backward-trace every pixel until it escapes (r > 100 M) or is captured (r < 1.1 r_+: in these
     horizon-penetrating charts a backward ray hugging the horizon continues onto an unphysical branch), recording its
     first crossing of the disk (z = 0, r_in < r < r_out), the one nearest the camera; the disk is opaque for shading,
     but the ray goes on, so that `escaped` and captured describe the shadow by themselves. Returns the camera state, the
     final state, the state at the crossing (cubic Hermite interpolation to z = 0) and per-pixel flags `escaped` and `hit`, with
-    `a` the image plane's half-width. Pixels go through one compiled trace in chunks of `chunk` rays (the last one
-    padded), which bounds the memory of the scan."""
+    `a` the image plane's half-width. Pixels are set up and go through one compiled trace in chunks of `chunk` rays (the
+    last one padded), which bounds the memory of the loop. A chunk stops after `steps` steps or once none of its rays is alive,
+    whichever comes first: a dead ray is frozen and can no longer cross the disk, so stopping early changes nothing."""
     import jax
 
-    start, half = static_camera(hole, distance, field_of_view, nx, ny, inclination)
     pixels = nx * ny
     capture = 1.1 * hole.horizon
     move = partial(rates, hole)
@@ -403,23 +427,31 @@ def trace_scene(hole: Hole, nx: int, ny: int, distance: float, field_of_view: fl
         rate = tuple(where(alive, new, old) for new, old in zip(moved_rate, rate))
         return (state, rate, alive, hit | on_disk, crossing), None
 
+    def going(loop):
+        taken, carry = loop
+        return (taken < steps) & carry[2].any()
+
+    def advance(loop):
+        taken, carry = loop
+        return taken + 1, step(carry, None)[0]
+
     def run(carry):
-        return jax.lax.scan(step, carry, None, length=steps)[0]
+        return jax.lax.while_loop(going, advance, (0, carry))
 
     compiled = jax.jit(run)
     parts = []
     for begin in range(0, pixels, chunk):
         count = min(chunk, pixels - begin)
         rays = np.minimum(np.arange(begin, begin + chunk), pixels - 1)               # the last chunk repeats its last ray
-        part = tuple(value[rays] for value in start)
-        final, _, _, hit, crossing = compiled((part, move(*part), np.ones(chunk, dtype=bool),
-                                               np.zeros(chunk, dtype=bool), part))
-        parts.append((tuple(value[:count] for value in final), np.asarray(hit)[:count],
-                      tuple(value[:count] for value in crossing)))
-        print(f"trace: {begin + count}/{pixels} rays", flush=True)
-    final = tuple(concatenate([part[0][k] for part in parts]) for k in range(len(start)))
-    hit = np.concatenate([part[1] for part in parts])
-    crossing = tuple(concatenate([part[2][k] for part in parts]) for k in range(len(start)))
+        part, half = static_camera(hole, distance, field_of_view, nx, ny, inclination, rays)
+        taken, (final, _, _, hit, crossing) = compiled((part, move(*part), np.ones(chunk, dtype=bool),
+                                                        np.zeros(chunk, dtype=bool), part))
+        parts.append((tuple(value[:count] for value in part), tuple(value[:count] for value in final),
+                      np.asarray(hit)[:count], tuple(value[:count] for value in crossing)))
+        print(f"trace: {begin + count}/{pixels} rays ({int(taken)} steps)", flush=True)
+    start, final, crossing = (tuple(concatenate([part[which][k] for part in parts]) for k in range(2))
+                              for which in (0, 1, 3))
+    hit = np.concatenate([part[2] for part in parts])
     radius_final = np.asarray(hole.radius(final[0]).kernel)[..., 0]
     return dict(start=start, final=final, crossing=crossing, hit=np.asarray(hit), escaped=radius_final > 100.0,
                 a=half, shape=(ny, nx))
@@ -497,15 +529,17 @@ class Disk:
 
 def disk_view(hole: Hole, scene: dict, temperature_scale: float) -> Disk:
     """Evaluate the disk physics at every crossing: redshift from the twistor's momentum, Page-Thorne temperature."""
-    hit = scene["hit"]
-    position, twistor = scene["crossing"]
-    momentum = tw.momentum(twistor)
-    radius = np.asarray(hole.radius(position).kernel)[..., 0]
-    coordinates = np.asarray(al.coordinates(position))
-    ratio = np.asarray(frequency_ratio(hole, position, momentum).kernel)[..., 0]
+    pixels = np.flatnonzero(scene["hit"])
+
+    def evaluate(position: Extensor, twistor: Extensor) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        radius = np.asarray(hole.radius(position).kernel)[..., 0]
+        coordinates = np.asarray(al.coordinates(position))
+        ratio = np.asarray(frequency_ratio(hole, position, tw.momentum(twistor)).kernel)[..., 0]
+        return radius, np.arctan2(coordinates[:, 2], coordinates[:, 1]), ratio
+
+    radius, angle, ratio = batched(evaluate, *(value[pixels] for value in scene["crossing"]))
     emitted = light.disk_temperature(radius, hole.spin, temperature_scale, hole.mass)
-    return Disk(np.flatnonzero(hit), radius[hit], np.arctan2(coordinates[hit, 2], coordinates[hit, 1]),
-                ratio[hit], (ratio * emitted)[hit])
+    return Disk(pixels, radius, angle, ratio, ratio * emitted)
 
 
 # --- shading -------------------------------------------------------------------------------------
@@ -532,7 +566,21 @@ def shade(scene: dict, disk: Disk, sky: np.ndarray, emissivity: np.ndarray | Non
     # The sky shows where a ray escaped without meeting the disk (rays go on past the disk, for the shadow's sake).
     clear = scene["escaped"] & ~scene["hit"]
     image[clear] += sky[clear]
-    return np.clip(image, 0, 1).reshape(ny, nx, 3)
+    return downsampled(np.clip(image, 0, 1).reshape(ny, nx, 3), scene["samples"], light.display_gamma)
+
+
+def downsampled(image: np.ndarray, samples: int, gamma: float = 1.0) -> np.ndarray:
+    """Anti-aliasing of an image [ny, nx, ...] traced at `samples` times the resolution in each direction: the mean of
+    each samples x samples block, over the pixels that have a value (NaN where none has). With `gamma`, the mean is
+    taken of display values raised to it, so that it is a mean of light rather than of its display encoding."""
+    if samples == 1:
+        return image
+    ny, nx = image.shape[:2]
+    blocks = image.reshape(ny // samples, samples, nx // samples, samples, *image.shape[2:]) ** gamma
+    valid = np.isfinite(blocks)
+    count = valid.sum(axis=(1, 3))
+    total = np.where(valid, blocks, 0.0).sum(axis=(1, 3))
+    return np.where(count > 0, total / np.maximum(count, 1), np.nan) ** (1 / gamma)
 
 
 def rings(radius: np.ndarray) -> np.ndarray:
@@ -541,58 +589,73 @@ def rings(radius: np.ndarray) -> np.ndarray:
 
 
 def sky_light(hole: Hole, scene: dict) -> np.ndarray:
-    return light.sky_color(sky_directions(hole, scene["final"]), light.star_texture())
+    directions = batched(lambda position, twistor: sky_directions(hole, (position, twistor)), *scene["final"])
+    return light.sky_color(directions, light.star_texture())
 
 
 def twistor_incidence(scene: dict) -> float:
     """How well local twistor transport kept each disk ray's twistor on its ray: the largest |omega| / |pi| at the
     disk, zero while the twistor passes through the ray's current event."""
-    twistors = scene["crossing"][1][scene["hit"]]
-    return float(np.asarray((tw.size(tw.omega(twistors)) / tw.size(tw.pi(twistors))).kernel).max())
+    twistors = scene["crossing"][1][np.flatnonzero(scene["hit"])]
+    ratio = batched(lambda twistor: np.asarray((tw.size(tw.omega(twistor)) / tw.size(tw.pi(twistor))).kernel), twistors)
+    return float(ratio.max())
 
 
 def conservation_error(hole: Hole, scene: dict) -> float:
     """Largest change of the photon's energy and angular momentum between camera and disk, relative to the energy."""
-    camera = killing_momenta(hole, scene["start"][0], tw.momentum(scene["start"][1]))
-    disk = killing_momenta(hole, scene["crossing"][0], tw.momentum(scene["crossing"][1]))
-    hit = scene["hit"]
-    return float(max(np.abs(disk[k][hit] - camera[k][hit]).max() for k in (0, 1)) / np.abs(camera[0]).max())
+    hit = np.flatnonzero(scene["hit"])
+    momenta = lambda position, twistor: killing_momenta(hole, position, tw.momentum(twistor))
+    camera = batched(momenta, *(value[hit] for value in scene["start"]))
+    disk = batched(momenta, *(value[hit] for value in scene["crossing"]))
+    # The camera's energy is the same for every pixel (k | u = 1 for the static observer), so the disk pixels' suffice.
+    return float(max(np.abs(disk[k] - camera[k]).max() for k in (0, 1)) / np.abs(camera[0]).max())
 
 
 def camera_figure(hole: Hole, scene: dict, disk: Disk, sky: np.ndarray, title: str, path: Path) -> None:
-    """The camera image beside the map of the frequency ratio observed/emitted on the disk."""
+    """The camera image beside the map of the frequency ratio observed/emitted on the disk, each drawn one image pixel
+    to one figure pixel (axes placed in pixels, no resampling)."""
     ny, nx = scene["shape"]
     ratio = np.full(nx * ny, np.nan)
     ratio[disk.pixels] = disk.ratio
-    fig, ax = plt.subplots(1, 2, figsize=(13, 5.2), facecolor="black")
-    ax[0].imshow(shade(scene, disk, sky, rings(disk.radius)), origin="lower", interpolation="none")
+    ratio = downsampled(ratio.reshape(ny, nx), scene["samples"])
+    camera = shade(scene, disk, sky, rings(disk.radius))
+    height, width = camera.shape[:2]
+    margin, top, gap, bar_width, bar_space, dpi = 12, 44, 12, 20, 90, 100
+    figure_width, figure_height = margin + 2 * width + gap + 10 + bar_width + bar_space, top + height + margin
+    fig = plt.figure(figsize=(figure_width / dpi, figure_height / dpi), dpi=dpi, facecolor="black")
+    place = lambda left, size: fig.add_axes([left / figure_width, margin / figure_height, size / figure_width,
+                                             height / figure_height])
+    ax = [place(margin, width), place(margin + width + gap, width)]
+    ax[0].imshow(camera, origin="lower", interpolation="none")
     spread = max(abs(np.nanmax(ratio) - 1), abs(1 - np.nanmin(ratio)))
-    image = ax[1].imshow(ratio.reshape(ny, nx), origin="lower", cmap="coolwarm_r", vmin=1 - spread, vmax=1 + spread,
+    image = ax[1].imshow(ratio, origin="lower", cmap="coolwarm_r", vmin=1 - spread, vmax=1 + spread,
                          interpolation="none")
-    bar = fig.colorbar(image, ax=ax[1], fraction=0.04)
+    bar = fig.colorbar(image, cax=place(margin + 2 * width + gap + 10, bar_width))
     bar.set_label("frequency observed / emitted", color="w"); bar.ax.tick_params(colors="w")
     for a in ax:
         a.axis("off")
     ax[0].set_title(title, color="w", fontsize=10)
     ax[1].set_title("gravitational redshift and Doppler shift of the disk light", color="w", fontsize=10)
-    fig.tight_layout(); fig.savefig(path, dpi=130, facecolor="black"); plt.close(fig)
+    fig.savefig(path, dpi=dpi, facecolor="black"); plt.close(fig)
 
 
 def disk_scene(hole: Hole, nx: int, ny: int, distance: float, fov: float, steps: int, r_out: float,
-               inclination: float, r_in: float | None = None) -> tuple[dict, Disk, np.ndarray, float]:
-    """Trace and evaluate a disk from the innermost stable orbit (unless `r_in` is given) out to `r_out`."""
+               inclination: float, r_in: float | None = None, samples: int = 1) -> tuple[dict, Disk, np.ndarray, float]:
+    """Trace and evaluate a disk from the innermost stable orbit (unless `r_in` is given) out to `r_out`, for an
+    nx x ny image traced with samples x samples rays per pixel (`shade` averages them)."""
     inner = light.innermost_stable_orbit(hole.spin, hole.mass) if r_in is None else r_in
-    scene = trace_scene(hole, nx, ny, distance, fov, steps, inner, r_out, inclination)
+    scene = trace_scene(hole, nx * samples, ny * samples, distance, fov, steps, inner, r_out, inclination)
+    scene["samples"] = samples
     return scene, disk_view(hole, scene, TEMPERATURE_SCALE), sky_light(hole, scene), inner
 
 
-def schwarzschild(nx=480, ny=360, D=50.0, fov=1.0, steps=1800, r_out=14.0, incl=np.radians(20.0), frames=60, turns=1.0):
+def schwarzschild(nx=640, ny=360, samples=2, D=50.0, fov=1.0, steps=1800, r_out=14.0, incl=np.radians(20.0), frames=60, turns=1.0):
     """Backward ray tracing of a thin Page-Thorne accretion disk around Schwarzschild, from the innermost stable orbit
     (6M) to r_out, colored by its observed blackbody temperature, and a starry sky: `render_schwarzschild.png`, and from the
     same trace `render_schwarzschild.gif`, with a two-armed emissivity pattern riding the Kepler flow so that it shears in the
     direct and the lensed images alike (`turns` inner-edge orbits per loop; Schwarzschild is static, one trace serves)."""
     hole = schwarzschild_hole()
-    scene, disk, sky, inner = disk_scene(hole, nx, ny, D, fov, steps, r_out, incl)
+    scene, disk, sky, inner = disk_scene(hole, nx, ny, D, fov, steps, r_out, incl, samples=samples)
     camera_figure(hole, scene, disk, sky,
                   f"{hole.name}: camera at r={D:g}, {np.degrees(incl):.0f} deg above the disk ({inner:g}-{r_out:g} M)",
                   OUT / "render_schwarzschild.png")
@@ -632,7 +695,7 @@ def save_gif(frames: list[np.ndarray], path: Path, duration: int, width: int = 9
     print("wrote", path, f"({len(frames)} frames)")
 
 
-def kerr(nx=480, ny=360, D=50.0, fov=1.0, steps=1800, r_out=14.0, incl=np.radians(15.0), spin=0.9,
+def kerr(nx=640, ny=360, samples=2, D=50.0, fov=1.0, steps=1800, r_out=14.0, incl=np.radians(15.0), spin=0.9,
          degree=0.8, frames=48):
     """The same camera and disk around a Kerr hole, `render_kerr.png`: frame dragging flattens the approaching side of
     the shadow, and the disk reaches in to the prograde innermost stable orbit.  From the same trace,
@@ -640,21 +703,24 @@ def kerr(nx=480, ny=360, D=50.0, fov=1.0, steps=1800, r_out=14.0, incl=np.radian
     camera on the screen carried by each ray's twistor, sweeps a dark band across the image. Disk light is doubled behind the analyzer, so
     unpolarized parts keep their brightness."""
     hole = kerr_hole(M, spin)
-    scene, disk, sky, inner = disk_scene(hole, nx, ny, D, fov, steps, r_out, incl)
+    scene, disk, sky, inner = disk_scene(hole, nx, ny, D, fov, steps, r_out, incl, samples=samples)
     camera_figure(hole, scene, disk, sky,
                   f"{hole.name}: camera at r={D:g}, {np.degrees(incl):.0f} deg above the disk ({inner:.2f}-{r_out:g} M)",
                   OUT / "render_kerr.png")
     report(hole, scene, disk)
-    hit = scene["hit"]
-    coherency = disk_coherency(*readout(scene["crossing"]), degree)                             # [pixels] Screen- <- ScreenSlice+
-    angles = np.linspace(0, np.pi, frames, endpoint=False)
-    passed = np.asarray(transmitted(coherency, analyzer_slices(angles)[:, None]).kernel)[..., 0]   # [frames, pixels]
+    analyzers = analyzer_slices(np.linspace(0, np.pi, frames, endpoint=False))[:, None]      # [frames, 1] ScreenSlice+
+
+    def passing(position: Extensor, twistor: Extensor) -> np.ndarray:
+        coherency = disk_coherency(*readout((position, twistor)), degree)                        # [rays] Screen- <- ScreenSlice+
+        return np.asarray(transmitted(coherency, analyzers).kernel)[..., 0].T                    # [rays, frames]
+
+    passed = batched(passing, *(value[disk.pixels] for value in scene["crossing"])).T           # [frames, disk pixels]
     # Unit intensity: two crossed analyzers pass all the light between them (frames is even, so frame k + frames/2 is
     # turned a quarter turn from frame k).
     total = passed[: frames // 2] + passed[frames // 2:]
-    print(f"polarizer: crossed analyzers pass {total[:, hit].min():.12f} .. {total[:, hit].max():.12f} of the light;"
-          f" one analyzer {passed[:, hit].min():.3f} .. {passed[:, hit].max():.3f}")
-    save_gif([shade(scene, disk, sky, rings(disk.radius), 2 * share[disk.pixels], POLARIZER_EXPOSURE_FACTOR)
+    print(f"polarizer: crossed analyzers pass {total.min():.12f} .. {total.max():.12f} of the light;"
+          f" one analyzer {passed.min():.3f} .. {passed.max():.3f}")
+    save_gif([shade(scene, disk, sky, rings(disk.radius), 2 * share, POLARIZER_EXPOSURE_FACTOR)
               for share in passed],
              OUT / "render_kerr.gif", 60)
 
