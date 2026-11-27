@@ -1,0 +1,153 @@
+"""Dirac spinors as twistor fields: the conventions of the GTG Dirac action in the CSTA (docs/PLAN_DIRAC.md, phase 0).
+
+A Dirac spinor is a twistor, an element of the left ideal Even P (`twistor.py`): eight real components, acted on by
+Spin(2,4) from the left, with the central pseudoscalar I as the imaginary unit. The Dirac algebra acts on it through
+
+    Gamma_a = I e_a p,      p = (n_o + n_inf) / sqrt 2 = (X + I_inf) / sqrt 2,
+
+which satisfy {Gamma_a, Gamma_b} = 2 eta_ab and Gamma_a Gamma_b = e_a e_b for a != b, so the Lorentz sector of the
+connection acts on twistors exactly as the rotation gauge field acts on GTG's spinor, psi -> 1/2 Omega(a) psi. Built from
+the origin and the infinity twistor (the compensators of `first_order`), p is not a fixed frame choice: it is the
+direction of X + I_inf. With this choice the twistor norm h is the Dirac bar pairing, h(Z1, Z2) = bar(psi1) psi2.
+
+The rest of the conformal algebra acts on the Dirac spinor algebraically:
+  * the dilation generator N = n_o ^ n_inf is the chirality, N = I Gamma_0 Gamma_1 Gamma_2 Gamma_3 (gamma_5), and the
+    omega and pi halves of a twistor are its Weyl spinors (N = -1 and +1);
+  * a translation is Gamma times a chiral projector, P_a = -sqrt 2 I Gamma_a Pi_+, and a special conformal
+    transformation the other one, K_a = -sqrt 2 I Gamma_a Pi_-, with Pi_+- = (1 +- N) / 2.
+
+The map from Lasenby, Doran and Gull's spinor (an even element psi of the spacetime algebra, the subalgebra of t, x,
+y, z here, whose signature is theirs) is Z = psi REFERENCE, with REFERENCE the unit twistor fixed by Gamma_0 Z = Z and
+e_y e_x Z = I Z. It turns their operations into these: gamma_mu psi gamma_0 -> Gamma_mu Z, psi I sigma_3 -> I Z,
+<psi ~psi>_0 -> h(Z, Z), psi gamma_0 ~psi -> the current h(Z, Gamma_a Z), psi gamma_3 ~psi -> -h(Z, Gamma_a N Z),
+and their kinetic form <gamma^a phi I gamma_3 ~psi>_0 -> Re h(Z_psi, I Gamma^a Z_phi).
+"""
+from __future__ import annotations
+
+import jax.numpy as jnp
+import numpy as np
+from numga import stack
+from numga.extensor import Extensor
+
+from . import algebra as al
+from . import twistor as tw
+from .fields import derivative
+from .first_order import _moved_connection
+from .variation import _euler, _monomial, _number, determinant
+
+Twistor = tw.Twistor
+I = tw.PSEUDOSCALAR
+SPACETIME = al.SPACETIME
+SQUARES = np.diag(al.ETA4)                                              # eta_aa, the frame raises by these
+
+P_AXIS = (al.n_o + al.n_inf) / np.sqrt(2.0)                             # [] Vector+, = p, square +1
+GAMMA = stack([(I * e * P_AXIS).cast(al.Even) for e in SPACETIME])     # [4] Even+, Gamma_a
+GAMMA_UP = stack([(I * e * P_AXIS * s).cast(al.Even) for e, s in zip(SPACETIME, SQUARES)])   # [4] Even+, Gamma^a
+CHIRALITY = (al.n_o ^ al.n_inf).cast(al.Even)                           # [] Even+, N = gamma_5, square +1
+RIGHT = (0.5 * (1 + CHIRALITY)).cast(al.Even)                           # Pi_+, onto the pi half
+LEFT = (0.5 * (1 - CHIRALITY)).cast(al.Even)                            # Pi_-, onto the omega half
+
+_SEED = (0.25 * (1 + GAMMA[0]) * (1 - I * (al.y * al.x)) * (np.sqrt(2.0) * tw.IDEMPOTENT)).cast(Twistor)
+REFERENCE = _SEED / float(np.sqrt(tw.norm(_SEED)))                      # [] Twistor, h(REFERENCE, REFERENCE) = 1
+
+
+def from_sta(spinor: Extensor) -> Extensor:
+    """The twistor of Lasenby, Doran and Gull's spinor, an even element of the spacetime subalgebra: psi REFERENCE."""
+    return (spinor * REFERENCE).cast(Twistor)
+
+
+def bar(first: Extensor, second: Extensor) -> Extensor:
+    """The Dirac pairing bar(psi1) psi2 = h(Z1, Z2), a scalar plus a pseudoscalar (complex)."""
+    return tw.inner(first, second)
+
+
+def act(operator: Extensor, spinor: Extensor) -> Extensor:
+    """An even element acting on a twistor from the left, kept in the ideal."""
+    return (operator * spinor).cast(Twistor)
+
+
+def scalar_density(spinor: Extensor) -> Extensor:
+    """sigma = bar(psi) psi = h(Z, Z), real: Lasenby, Doran and Gull's <psi ~psi>_0."""
+    return tw.real_part(bar(spinor, spinor))
+
+
+def pseudoscalar_density(spinor: Extensor) -> Extensor:
+    """omega = h(Z, I N Z) = bar(psi) i gamma_5 psi, real: minus their <psi ~psi I>_0."""
+    return tw.real_part(bar(spinor, act(I * CHIRALITY, spinor)))
+
+
+def current(spinor: Extensor) -> Extensor:
+    """J_a = h(Z, Gamma_a Z), the frame components of the Dirac current psi gamma_0 ~psi, along a new last axis."""
+    return tw.real_part(bar(spinor[..., None], act(GAMMA, spinor[..., None])))
+
+
+def axial_current(spinor: Extensor) -> Extensor:
+    """A_a = h(Z, Gamma_a N Z) = bar(psi) gamma_a gamma_5 psi: minus the frame components of the spin vector
+    psi gamma_3 ~psi, along a new last axis. The spin trivector is S = 1/2 psi I gamma_3 ~psi = -1/2 I A."""
+    return tw.real_part(bar(spinor[..., None], act(GAMMA * CHIRALITY, spinor[..., None])))
+
+
+# --- phase 1: the Dirac density of a connection, broken by the compensators X = n_o and I_inf = n_inf -------------
+ORIGIN, INFINITY = al.n_o, al.n_inf
+# The eight real units of a twistor, Z = sum_k c_k UNITS[k]: the basis twistors and I times them.
+UNITS = [tw.BASIS[k] for k in range(4)] + [(I * tw.BASIS[k]).cast(Twistor) for k in range(4)]
+CONNECTIONS = ("full", "lorentz")
+
+
+def coframe_of(connection: Extensor) -> Extensor:
+    """The coframe a connection carries, e : Direction <- Direction: DX = Omega x X with its components along the
+    compensators removed, v - (v . I_inf) X - (v . X) I_inf, read as a direction. The dilation sector, which moves
+    X along itself, drops out."""
+    moved = connection.commutator(ORIGIN)                                              # Vector <- Direction
+    across = moved - (moved | INFINITY) * ORIGIN - (moved | ORIGIN) * INFINITY
+    return across.dual().cast(al.Direction)
+
+
+def transport_part(connection: Extensor, which: str) -> Extensor:
+    """The part of Omega that moves the spinor: all of it ('full', the twistor transport), or the Lorentz sector, the
+    stabilizer of both compensators ('lorentz', Lasenby, Doran and Gull's rotation gauge field)."""
+    if which == "full":
+        return connection
+    if which == "lorentz":
+        return al.sector(connection, "M")
+    raise ValueError(f"connection must be one of {CONNECTIONS}")
+
+
+def dirac_operator(omega, spinor, x: Extensor, which: str = "full") -> Extensor:
+    """Gamma^a D_{E_a} Z at x: the frame vectors E_a = e^-1(d_a), D_v Z = v . grad Z + 1/2 Omega(v) Z with Omega the
+    `transport_part`."""
+    connection = omega(x)
+    frame = coframe_of(connection).inverse()(al.DIRECTIONS)                          # [4] Direction, E_a
+    moving = transport_part(connection, which)
+    covariant = derivative(spinor)(x)(frame) + 0.5 * (moving(frame) * spinor(x))     # [4] Even, D_{E_a} Z
+    return (GAMMA_UP * covariant).sum(axis=0).cast(Twistor)
+
+
+def density(omega, spinor, x: Extensor, mass: float = 0.0, which: str = "full"):
+    """|det e| (Re h(Z, I Gamma^a D_a Z) - m h(Z, Z)) at x as a component of d^4x: Lasenby, Doran and Gull's
+    det(h)^-1 <h(d_a) a.D psi I gamma_3 ~psi - m psi ~psi> (their 3.56, with A = 0) through `from_sta`, when
+    `which` is 'lorentz'."""
+    Z = spinor(x)
+    volume = jnp.abs(_number(determinant(coframe_of(omega(x)))))
+    kinetic = tw.real_part(bar(Z, act(I, dirac_operator(omega, spinor, x, which))))
+    return volume * (_number(kinetic) - mass * _number(scalar_density(Z)))
+
+
+def _moved_spinor(spinor, alpha, x, amplitude):
+    def moved(y: Extensor) -> Extensor:
+        weight = _monomial(y - x, alpha)
+        shift = sum((UNITS[k] * (amplitude[k] * weight) for k in range(8)), 0 * UNITS[0])
+        return (spinor(y) + shift).cast(Twistor)
+    return moved
+
+
+def euler_lagrange_spinor(omega, spinor, x4, mass: float = 0.0, which: str = "full") -> np.ndarray:
+    """delta S / delta c_k, [8], for Z = sum_k c_k UNITS[k]: the Dirac equation, first order in Z."""
+    return _euler(lambda alpha, x, amplitude: density(omega, _moved_spinor(spinor, alpha, x, amplitude), x, mass, which),
+                  (8,), x4, order=1)
+
+
+def euler_lagrange_connection(omega, spinor, x4, mass: float = 0.0, which: str = "full") -> np.ndarray:
+    """delta S / delta Omega^k_mu, [15, 4], of the Dirac density: the matter sources of the gravitational equations."""
+    return _euler(lambda alpha, x, amplitude: density(_moved_connection(omega, alpha, x, amplitude), spinor, x, mass,
+                                                     which), (15, 4), x4, order=1)
