@@ -31,6 +31,7 @@ from numga.extensor import Extensor
 
 from . import algebra as al
 from . import twistor as tw
+from .curvature import curvature
 from .fields import derivative
 from .first_order import _moved_connection
 from .variation import _euler, _monomial, _number, determinant
@@ -151,3 +152,56 @@ def euler_lagrange_connection(omega, spinor, x4, mass: float = 0.0, which: str =
     """delta S / delta Omega^k_mu, [15, 4], of the Dirac density: the matter sources of the gravitational equations."""
     return _euler(lambda alpha, x, amplitude: density(_moved_connection(omega, alpha, x, amplitude), spinor, x, mass,
                                                      which), (15, 4), x4, order=1)
+
+
+# --- phase 3: the spinor field equation in closed form -------------------------------------------------------------
+def frame_at(connection: Extensor) -> Extensor:
+    """[4] Direction: the frame vectors E_a = e^-1(d_a) of the coframe the connection carries."""
+    return coframe_of(connection).inverse()(al.DIRECTIONS)
+
+
+def torsion_trace(omega, x: Extensor) -> Extensor:
+    """tau = -e^b T^a_{ab}, a spacetime vector: the trace of the torsion T(a, b) = -n_o _| F_P(a, b), read from the
+    translation sector of the curvature of the Lorentz and translation parts of Omega on the frame (the dilation part
+    would add b ^ e to F_P, and the Dirac field does not see it). It is Lasenby, Doran and Gull's
+    det(h) D_mu (h_bar(e^mu) det(h)^-1), (3.65), whose vanishing makes the minimally coupled action give the minimally
+    coupled equation."""
+    def poincare(y: Extensor) -> Extensor:
+        connection = omega(y)
+        return al.sector(connection, "M") + al.sector(connection, "P")
+
+    strength = al.sector(curvature(poincare)(x), "P")
+    torsion = -(ORIGIN | strength)                                                     # Vector <- (a, b)
+    frame = frame_at(omega(x))
+    reciprocal = [e * s for e, s in zip(SPACETIME, SQUARES)]                           # e^a
+    total = 0 * SPACETIME[0]
+    for b in range(4):
+        trace = sum(((torsion(frame[a], frame[b]) * reciprocal[a]).restrict_grade(0) for a in range(4)), 0 * I)
+        total = total - (trace * reciprocal[b]).restrict_grade(1)
+    return total.cast(al.Vector)
+
+
+def spinor_equation(omega, spinor, x: Extensor, mass: float = 0.0, which: str = "full") -> Extensor:
+    """W, a twistor, with delta S / delta c_k = 2 |det e| Re h(UNITS[k], W):
+
+        W = I Gamma^a D_a Z + 1/2 I Gamma(tau) Z - m Z + 1/2 (O + ~O) Z,      O = 1/2 I Gamma^a (Omega - Omega_M)(E_a),
+
+    D the Lorentz transport and tau the `torsion_trace`. The last term is the h-Hermitian part (the reverse is the
+    h-adjoint) of what the other sectors add under the full transport; it is absent for 'lorentz'. With 'lorentz' this
+    is Lasenby, Doran and Gull's coupled Dirac equation (3.62)."""
+    connection = omega(x)
+    frame = frame_at(connection)
+    Z = spinor(x)
+    lorentz = al.sector(connection, "M")
+    covariant = derivative(spinor)(x)(frame) + 0.5 * (lorentz(frame) * Z)
+    kinetic = I * (GAMMA_UP * covariant).sum(axis=0)
+    tau = torsion_trace(omega, x)
+    gamma_tau = (I * tau * P_AXIS).cast(al.Even)
+    equation = kinetic + 0.5 * (I * gamma_tau * Z) - mass * Z
+    if which == "full":
+        extra = connection - lorentz
+        operator = (0.5 * I * (GAMMA_UP * extra(frame)).sum(axis=0)).cast(al.Even)
+        equation = equation + 0.5 * ((operator + ~operator) * Z)
+    elif which != "lorentz":
+        raise ValueError(f"connection must be one of {CONNECTIONS}")
+    return equation.cast(Twistor)

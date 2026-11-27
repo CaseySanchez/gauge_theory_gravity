@@ -122,3 +122,13 @@ RESULTS.md (claims, tests, tolerances), DEEP_DIVE §11, the LaTeX formulation (a
     including the torsion-trace term. Holds on Kerr with τ = 0 and with a torsion that gives τ ≠ 0.
   - The oracle density equals `dirac.density(..., "lorentz")` through `from_sta`, to 1e-13, on PG and Kerr, with and
     without torsion and mass.
+- Phase 3: done (`dirac.torsion_trace`, `dirac.spinor_equation`; `tests/test_dirac_equation.py`, 11 tests).
+  - With the Lorentz coupling, the CSTA spinor equation is the oracle's blade by blade (1e-13), on PG and Kerr, with
+    and without torsion. That is LDG's (3.62).
+  - Closed form: `I Γ^a D_a Z + ½ I Γ(τ) Z = m Z`, with `δS/δc_k = 2|det e| Re h(U_k, W)`. The torsion trace
+    `τ_b = −T^a_{ab}` uses `T(a,b) = −n_o⌋F_P(a,b)`, the curvature of the Lorentz and translation parts of Ω. It equals
+    LDG's τ (3.65). The dilation part has to be left out: `[D, P] ∝ P` puts `b∧e` into `F_P`, and the Dirac field does
+    not see b. Without torsion τ = 0 for any b, so the equation is minimally coupled.
+  - Full transport: W gains `½(O + Õ)Z`, the h-Hermitian part (the reverse is the h-adjoint) of
+    `O = ½ I Γ^a (Ω − Ω_M)(E_a)`. Exact for general f (antisymmetric part included), b with curl, and torsion. For
+    `f = k e` it is the compensator mass `√2(1 + k) Z`.
