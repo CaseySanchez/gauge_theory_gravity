@@ -1,6 +1,6 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (316 tests), plus 21 slow tests, `pytest -m slow`
+All checks below are executable: `source .venv/bin/activate && pytest` (342 tests), plus 21 slow tests, `pytest -m slow`
 (about 60 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
 `test_macdowell_mansouri.py`, `test_beyond_einstein.py` and `test_consistency_loop.py`. Demos:
 `cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about 2.5 hours each at 640×360 with 2×2 rays per pixel on an RTX 3060).
@@ -398,6 +398,41 @@ subalgebra, whose signature is theirs) with numpy matrices for h_bar and none of
   alpha = 1e-3, unchanged to 3% at 1e-2 (slow). So with Dirac matter and the full transport the minimally coupled
   Dirac equation requires alpha = 0: the Dirac field fixes the Weyl-squared admixture of section 11.4.
 
+## A self-gravitating Dirac solution (docs/PLAN_DIRAC_SOLUTION.md; `tests/cldg_solution.py`, `test_cldg_solution.py`, `test_cldg_csta.py`, `test_cldg_full_transport.py`)
+
+The reference is the homogeneous Dirac cosmology of Challinor, Lasenby, Doran and Gull (GRG 29 (1997) 1527), with Lambda
+from Leong's thesis (gr-qc/0311016, section 2.4): spatially flat, h_bar(b) = b + H (b . x) gamma_0,
+psi = sqrt(rho) e^{I beta/2} e^{-I sigma_3 chi} L, rho' = -3 rho H, chi' = m cos beta + 3 pi rho,
+3 H^2 - 12 pi^2 rho^2 - 8 pi m rho cos beta - Lambda = 0, in closed form. Units G = 1, kappa = 8 pi.
+
+* **In the oracle** (`test_cldg_solution.py`). The closed forms solve the reduced equations (1e-12). chi(t) came through
+  the PDF extraction garbled, so it is derived: chi = +-m t - 1/2 ln(alpha coth alpha t +- m), alpha = sqrt(3 Lambda)/2.
+  The Newtonian-gauge rotation field H b ^ gamma_0 is LDG's closed form 4.53. LDG's spinor, h and Omega equations
+  (autodiff of their action density) all vanish (1e-12) for particle, antiparticle and a constant boost; without the
+  contorsion, or with its sign flipped, they do not. With the repo's R (de Sitter R = -4 Lambda) a repulsive Lambda
+  enters LDG's density as +Lambda det(h)^-1; their printed -Lambda misses the h equation by 2 Lambda.
+* **In the CSTA, Lorentz coupling** (`test_cldg_csta.py`). The coframe e^0 = dt, e^i = dx^i - H x^i dt (identity plus a
+  dyad, inverted in closed form), Levi-Civita plus LDG's contorsion, f = e/beta and gamma = Lambda/6 + 1/beta: all 60
+  connection rows and the 8 spinor rows of S1 + beta S2 + gamma S3 + 4 kappa |det e| L_D vanish (1e-13), for the
+  particle (beta = 4), antiparticle (beta = 2) and boosted particle (beta = -1). The matter rows are O(1-15). Without
+  the contorsion the M and P rows miss by O(5). This is the first configuration here that solves the coupled
+  gravity-Dirac system, and it checks the 4 kappa coupling and Lambda = 6 (gamma - 1/beta) against an independent
+  solution.
+* **In the CSTA, full twistor transport** (`test_cldg_full_transport.py`), the target. For this spinor C / rho is
+  constant: (sqrt 2/4) sigma delta plus a tensor part in the gamma_0 gamma_3 plane, which chi leaves alone (with the
+  boost it rotates with chi but depends on t alone). At the Dirac-shifted f the spinor equation is LDG's with the mass
+  m - sqrt 2 (1 + 1/beta) + kappa sigma/(12 beta) (the compensator mass sqrt 2 (1 + tr F/4) and the tensor coupling
+  -F_03/sqrt 2). On a local Taylor ansatz only the Friedmann constraint changes: LDG's contorsion still solves the M rows
+  and the shifted f the K rows, and the remaining P_t residual equals 4 (3 H^2 - Lambda - 12 pi^2 a rho^2 -
+  8 pi m0 rho cos beta) at 10 states (1e-14), with a = 1 + 2/(9 beta), m0 = m - sqrt 2 (1 + 1/beta). Eliminating f
+  from 12 tr F - 2 beta ((tr F)^2 - F:F) + 4 kappa C.F leaves 24/beta (inside Lambda), 4 kappa sqrt 2 sigma / beta
+  (inside the mass) and the contact term (kappa / 2 beta)((tr C)^2/3 - C:C), here -kappa sigma^2/(24 beta). The closed
+  forms carry over with m0 and sqrt(a) alpha, chi = +-m0 t - sqrt(a)/2 ln(sqrt(a) alpha coth alpha t +- m0), and all
+  60 + 8 rows vanish (1e-12) for the three cases; the Lorentz-coupled solution does not.
+* **The scale question.** The rows see only m0, so the compensator mass is absorbed into the bare mass: a physical
+  mass does not fix beta. beta fixes a, the strength of the effective spin-torsion term (a = 7/9 at beta = -1, zero
+  at beta = -2/9).
+
 ## Not done / not established (be careful when citing)
 
 * **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the
@@ -411,9 +446,12 @@ subalgebra, whose signature is theirs) with numpy matrices for h_bar and none of
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
   then checked for Schwarzschild between the PG and Kerr-Schild gauges (section above). GTG's field equations with
-  Dirac matter were checked pointwise against an LDG oracle (section "GTG with Dirac matter"). Not checked: Doran's
-  spinning PG gauge of Kerr; a self-gravitating Dirac solution; the effective four-fermion terms left after
-  eliminating the Dirac-shifted f; the conformal weight of the Dirac field; electromagnetic coupling.
+  Dirac matter were checked pointwise against an LDG oracle (section "GTG with Dirac matter"), and one
+  self-gravitating solution, a homogeneous cosmology, solves them and the CSTA's (section above). Not checked: Doran's
+  spinning PG gauge of Kerr; a localized self-gravitating Dirac solution (Finster-Smoller-Yau); the contact term left
+  by the Dirac-shifted f away from the homogeneous state (derived in general, checked only there); the CLDG
+  antiparticle bounce and the extremal case 4 m^2 = 3 Lambda; the conformal weight of the Dirac field; electromagnetic
+  coupling.
 * **Dilation gauge field b** is zero in Tier B. Nonzero b examined: the pure gauge b = d lambda of a Weyl rescaling,
   and a b with curl, which drops out of the first-order action and of the Dirac action. Its dynamics and gauge fixing
   were not explored (spec 11.3).

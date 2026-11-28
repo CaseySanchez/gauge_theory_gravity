@@ -1569,6 +1569,46 @@ With the Lorentz coupling \(f\propto e\), and the term only rescales
 the Dirac-shifted \(f\) varies in space, and the torsion acquires a trace
 linear in \(\alpha\). Dirac matter then requires \(\alpha=0\).
 
+\subsection{A Self-Gravitating Solution}
+
+Challinor, Lasenby, Doran and Gull \cite{CLDG} found a homogeneous Dirac
+cosmology in GTG, extended with a cosmological constant by Leong
+\cite{Leong}. In units \(G=1\), \(\kappa=8\pi\):
+\[
+    \bar h(b)=b+H(b\cdot x)\gamma_0,\qquad
+    \psi=\sqrt\rho\,e^{I\beta/2}e^{-I\sigma_3\chi}L,\qquad
+    3H^2=\Lambda+12\pi^2\rho^2+8\pi m\rho\cos\beta,
+\]
+with \(\cos\beta=\pm1\), \(\dot\rho=-3\rho H\) and
+\(\dot\chi=m\cos\beta+3\pi\rho\), in closed form. The
+\(12\pi^2\rho^2\) term is spin--torsion. In the CSTA the coframe
+\(e^0=dt\), \(e^i=dx^i-Hx^i\,dt\) is identity plus a dyad. With
+Levi-Civita plus LDG's contorsion, \(f=e/\beta\),
+\(\Lambda=6(\gamma-1/\beta)\) and the Lorentz coupling, all
+60 connection equations and the spinor equation hold. (A repulsive
+\(\Lambda\) enters LDG's density as \(+\Lambda\det(h)^{-1}\) with
+this sign of \(R\).)
+
+Under the full transport the special-conformal equation shifts \(f\).
+Eliminating it from \(12\operatorname{tr}F-2\beta((\operatorname{tr}F)^2
+-F{:}F)+4\kappa\,C\cdot F\) leaves \(24/\beta\), which sits in
+\(\Lambda\); a mass \(4\sqrt2\kappa\sigma/\beta\), which joins the
+compensator mass; and a contact term
+\[
+    \frac{\kappa}{2\beta}\left(\tfrac13(\operatorname{tr}C)^2-C{:}C\right)
+    =-\frac{\kappa\sigma^2}{24\beta}
+\]
+on this state. The solution keeps its form, with
+\[
+    m\to m_0=m-\sqrt2\left(1+\tfrac1\beta\right),\qquad
+    12\pi^2\rho^2\to12\pi^2a\rho^2,\quad a=1+\frac2{9\beta},
+\]
+and the closed forms carry over with \(\sqrt a\,\alpha\) in place of
+\(\alpha=\sqrt{3\Lambda}/2\); again every equation holds. The
+compensator mass is absorbed into the bare mass, so the fermion mass
+does not fix \(\beta\); \(\beta\) fixes the strength \(a\) of the
+effective spin--torsion term.
+
 % --------------------------------------------------
 \section{Open Questions}
 \label{sec:questions}
@@ -1589,8 +1629,9 @@ The translation sector is an orthonormal coframe of a torsion-free
 metric. Does it represent Doran and Lasenby's \(h(a)\), with its
 fiducial flat background, in general? Open cases include Doran's
 spinning Painlev\'e--Gullstrand gauge of Kerr. GTG's field equations
-with Dirac matter hold pointwise (Section~\ref{sec:dirac}); no
-self-gravitating Dirac solution has been constructed.
+with Dirac matter hold pointwise (Section~\ref{sec:dirac}), and a
+homogeneous Dirac cosmology solves them; localized self-gravitating
+solutions are not constructed.
 
 \subsection{The Dilation Field}
 
@@ -1615,8 +1656,9 @@ adds a massive spin-2 ghost of mass \(m^2=-1/(24\alpha)\). Open:
     \item dynamics for the compensators, which are fixed in both the
     second- and first-order forms;
     \item the physical meaning of \(\beta\);
-    \item matter other than Dirac's, the four-fermion terms left by the
-    Dirac-shifted special-conformal field, and the conformal weight of
+    \item matter other than Dirac's, the general form of the contact
+    term left by the Dirac-shifted special-conformal field (checked
+    only on the homogeneous cosmology), and the conformal weight of
     the Dirac field.
 \end{itemize}
 
@@ -1780,6 +1822,13 @@ thus form a constrained sector of the conformal formulation.
 \bibitem{LDG} A.~Lasenby, C.~Doran and S.~Gull, \emph{Gravity, gauge
 theories and geometric algebra}, Phil.\ Trans.\ R.\ Soc.\ Lond.\ A
 \textbf{356} (1998) 487--582, arXiv:gr-qc/0405033.
+\bibitem{CLDG} A.~Challinor, A.~Lasenby, C.~Doran and S.~Gull,
+\emph{Massive, non-ghost solutions for the Dirac field coupled
+self-consistently to gravity}, Gen.\ Rel.\ Grav.\ \textbf{29} (1997)
+1527.
+\bibitem{Leong} B.~Leong, \emph{Spin-torsion, braneworlds and changing
+symmetry in the universe}, PhD thesis, University of Cambridge (2002),
+arXiv:gr-qc/0311016.
 \end{thebibliography}
 
 \end{document}

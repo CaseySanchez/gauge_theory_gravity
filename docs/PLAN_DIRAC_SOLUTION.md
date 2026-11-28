@@ -140,3 +140,7 @@ transport changes in it.
     mass does not force β ≈ −1. What β does fix is a, the strength of the effective spin–torsion term: a = 7/9 at
     β = −1, and the term cancels at β = −2/9. A real `√a` needs β > 0 or β < −2/9. For a ≤ 0 the closed form changes
     (not covered).
+- Phase 3 (stretch, the localized Finster–Smoller–Yau solution): not started.
+- Phase 4: done. RESULTS.md has a new section, "A self-gravitating Dirac solution", and DEEP_DIVE §5.9, §10 and §11, the
+  README and the LaTeX formulation (§13.4, open questions, the CLDG and Leong citations) are updated. Counts: 342 fast
+  tests and 21 slow.

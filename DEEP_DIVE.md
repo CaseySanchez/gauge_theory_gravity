@@ -474,6 +474,15 @@ its Lorentz sector (`"lorentz"`, LDG's coupling and the reference). `euler_lagra
   density, so the Lorentz equation gains $\alpha\,\epsilon(T\wedge f-e\wedge Df)$. With the Lorentz coupling $f\propto e$, the
   term only rescales $S_1$'s, and the loop holds for every $\alpha$. With the full transport the Dirac-shifted $f$ varies in
   space, and the torsion acquires a trace linear in $\alpha$, so the minimally coupled equation fails unless $\alpha=0$.
+- **A self-gravitating solution.** The homogeneous Dirac cosmology of Challinor, Lasenby, Doran and Gull (with
+  $\Lambda$ from Leong's thesis) has $\bar h(b)=b+H(b\cdot x)\gamma_0$, $\psi=\sqrt\rho\,e^{I\beta/2}e^{-I\sigma_3\chi}L$ and
+  $3H^2=\Lambda+12\pi^2\rho^2+8\pi m\rho\cos\beta$. In the CSTA, the coframe $e^i=dx^i-Hx^i\,dt$ is identity plus a dyad.
+  With Levi-Civita plus LDG's contorsion, $f=e/\beta$ and the Lorentz coupling, all 60 connection rows and 8 spinor
+  rows vanish. Under the full transport $f$ is Dirac-shifted, and eliminating it leaves the contact term
+  $\tfrac\kappa{2\beta}((\mathrm{tr}C)^2/3-C{:}C)=-\kappa\sigma^2/(24\beta)$ on this state. The solution keeps its form with
+  $m_0=m-\sqrt2(1+1/\beta)$ and the spin–torsion term scaled by $a=1+2/(9\beta)$, in closed form, and again every row
+  vanishes. The compensator mass is absorbed into $m$; $\beta$ sets $a$. With $\Lambda$ repulsive it enters LDG's
+  density as $+\Lambda\det(h)^{-1}$ in the repo's sign of $R$.
 
 ---
 
@@ -781,6 +790,9 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 | spin, stress-energy, special-conformal and dilation sources of the connection equation | `test_dirac_sources.py` | 1e-12 to 1e-13 |
 | LDG contorsion solves the Lorentz rows; torsion $=\kappa(a\wedge b)\cdot S$, traceless; Dirac-shifted $f$ | `test_spin_torsion.py` | 1e-12 |
 | with $\alpha\langle F\wedge F\wedge X\wedge I\rangle$: loop kept by the Lorentz coupling, broken linearly in $\alpha$ by the full transport (slow) | `test_consistency_loop.py` | 1e-11 to 1e-13; 5% linearity |
+| CLDG Dirac cosmology: closed forms, LDG's field equations in the oracle, $+\Lambda$ sign | `test_cldg_solution.py` | 1e-12 |
+| CLDG cosmology solves every CSTA row with the Lorentz coupling; not without the contorsion | `test_cldg_csta.py` | 1e-13 |
+| full transport: homogeneous $C$, $m_0$ and $a$, every CSTA row vanishes | `test_cldg_full_transport.py` | 1e-12 |
 
 ---
 
@@ -788,8 +800,8 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 
 - **Dynamics.** The code varies chosen actions pointwise (§5.7, §5.8, §5.9) and checks known geometries against the
   resulting equations; it does not solve them for new geometries. The only matter is Dirac's (§5.9), checked
-  pointwise: no self-gravitating Dirac solution is constructed, and the loop-breaking of §5.9 is shown to first order
-  in $\alpha$.
+  pointwise, and one self-gravitating solution, a homogeneous Dirac cosmology, solves the full CSTA system under both
+  transports. The loop-breaking of §5.9 is shown to first order in $\alpha$.
 - **Einstein gravity (§11.4)** is recovered with the infinity twistor as compensator, while the curvature-squared density
   alone gives Weyl gravity. In second-order form the compensator action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$ gives
   Einstein's equations with $\Lambda=-6c$; in first-order form, varying the full connection with $n_o$ and $n_\infty$
@@ -813,10 +825,12 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
   transformation $e^{-\lambda\,n_o\wedge n_\infty/2}e^{\Upsilon\wedge n_o/2}$, $\Upsilon=\nabla\lambda$, of the
   normal connection, and its dilation factor alone gives $b=d\lambda$. A dilation field with curl drops out of the
   first-order action and of the Dirac action (§5.9); its own dynamics are not examined.
-- **Dirac matter (§5.9).** Open: the effective four-fermion terms left after eliminating the Dirac-shifted $f$ (a
-  $(\bar\psi\psi)^2$ term through the compensator mass, and $T_{ab}T^{ab}$); the conformal weight of the Dirac field
-  under Weyl rescaling; the physical scale of the compensator mass $\sqrt2(1+\tfrac14\mathrm{tr}F)$ relative to the
-  length the translation sector carries; electromagnetic coupling.
+- **Dirac matter (§5.9).** The contact term left after eliminating the Dirac-shifted $f$ is
+  $\tfrac\kappa{2\beta}((\mathrm{tr}C)^2/3-C{:}C)$, checked only on the homogeneous cosmology. Open: its general form in
+  $\bar\psi\psi$, $\bar\psi\gamma_5\psi$ and the tensor bilinear; localized self-gravitating solutions (Finster–Smoller–Yau),
+  where gradients of $f$ enter; the conformal weight of the Dirac field under Weyl rescaling; electromagnetic coupling.
+  The compensator mass $\sqrt2(1+1/\beta)$ is absorbed into the bare mass in the cosmology, and $\beta$ instead
+  sets the strength $a=1+2/(9\beta)$ of the effective spin–torsion term.
 - **Fundamental versors (§11.1).** Only pure-gauge flatness and transport were examined.
 - **Twistors.** No twistor form of the dynamics, no global twistor space (it exists only for conformally flat or
   half-flat spacetimes), and no two-twistor massive particles.
