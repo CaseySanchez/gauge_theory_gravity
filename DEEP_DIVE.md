@@ -483,6 +483,16 @@ its Lorentz sector (`"lorentz"`, LDG's coupling and the reference). `euler_lagra
   $m_0=m-\sqrt2(1+1/\beta)$ and the spin–torsion term scaled by $a=1+2/(9\beta)$, in closed form, and again every row
   vanishes. The compensator mass is absorbed into $m$; $\beta$ sets $a$. With $\Lambda$ repulsive it enters LDG's
   density as $+\Lambda\det(h)^{-1}$ in the repo's sign of $R$.
+- **A localized solution.** The Einstein–Dirac soliton of Finster, Smoller and Yau (two fermions in the singlet,
+  $ds^2=dt^2/T^2-dr^2/A-r^2d\Omega^2$) has no spin in total, so no contorsion: it solves LDG's equations as it
+  stands. In the CSTA the coframe is identity plus $(1/T-1)$ on the time part and $(1/\sqrt A-1)$ times the radial
+  projector; with Levi-Civita, $f=e/\beta$, the Lorentz coupling and the two fermions summed, every row vanishes to
+  the fit's floor. Under the full transport $C_{ab}=\tfrac{\sqrt2}4(\sigma\eta_{ab}+K_{ab})$, with
+  $K_{ab}=\langle(\gamma_a\wedge\gamma_b)I\psi I\sigma_3\tilde\psi\rangle$ the dual spin bivector, magnetic on the
+  singlet. $f$ enters the action only algebraically, so its gradients never enter, and eliminating it gives GTG with
+  $m_0$ and the contact term $\tfrac\kappa{2\beta}(\sigma^2/6+K_{ab}K^{ab}/8)$ everywhere. FSY's equations gain the
+  mass $m_0-\kappa\sigma/(6\beta)$, an anomalous radial term $-\kappa K/(4\beta)$ and the contact energy; their
+  ground states survive for $\beta=4,1,-1,-\tfrac12$, the spectrum moved by a few per cent, and solve every CSTA row.
 
 ---
 
@@ -793,6 +803,9 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 | CLDG Dirac cosmology: closed forms, LDG's field equations in the oracle, $+\Lambda$ sign | `test_cldg_solution.py` | 1e-12 |
 | CLDG cosmology solves every CSTA row with the Lorentz coupling; not without the contorsion | `test_cldg_csta.py` | 1e-13 |
 | full transport: homogeneous $C$, $m_0$ and $a$, every CSTA row vanishes | `test_cldg_full_transport.py` | 1e-12 |
+| FSY soliton: shooting, STA map, singlet spin zero, LDG's equations with two fermions | `test_fsy_solution.py` | fit floor, 1e-11 |
+| FSY soliton solves every CSTA row with the Lorentz coupling (second radius slow) | `test_fsy_csta.py` | 1e-10 |
+| full transport: $C$ in STA bilinears, magnetic $K$, contact term, modified equations, bound state solves every CSTA row (slow) | `test_fsy_full_transport.py` | 1e-15; 1e-8 |
 
 ---
 
@@ -800,8 +813,8 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 
 - **Dynamics.** The code varies chosen actions pointwise (§5.7, §5.8, §5.9) and checks known geometries against the
   resulting equations; it does not solve them for new geometries. The only matter is Dirac's (§5.9), checked
-  pointwise, and one self-gravitating solution, a homogeneous Dirac cosmology, solves the full CSTA system under both
-  transports. The loop-breaking of §5.9 is shown to first order in $\alpha$.
+  pointwise, and two self-gravitating solutions, a homogeneous Dirac cosmology and the Finster–Smoller–Yau soliton,
+  solve the full CSTA system under both transports. The loop-breaking of §5.9 is shown to first order in $\alpha$.
 - **Einstein gravity (§11.4)** is recovered with the infinity twistor as compensator, while the curvature-squared density
   alone gives Weyl gravity. In second-order form the compensator action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$ gives
   Einstein's equations with $\Lambda=-6c$; in first-order form, varying the full connection with $n_o$ and $n_\infty$
@@ -825,12 +838,12 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
   transformation $e^{-\lambda\,n_o\wedge n_\infty/2}e^{\Upsilon\wedge n_o/2}$, $\Upsilon=\nabla\lambda$, of the
   normal connection, and its dilation factor alone gives $b=d\lambda$. A dilation field with curl drops out of the
   first-order action and of the Dirac action (§5.9); its own dynamics are not examined.
-- **Dirac matter (§5.9).** The contact term left after eliminating the Dirac-shifted $f$ is
-  $\tfrac\kappa{2\beta}((\mathrm{tr}C)^2/3-C{:}C)$, checked only on the homogeneous cosmology. Open: its general form in
-  $\bar\psi\psi$, $\bar\psi\gamma_5\psi$ and the tensor bilinear; localized self-gravitating solutions (Finster–Smoller–Yau),
-  where gradients of $f$ enter; the conformal weight of the Dirac field under Weyl rescaling; electromagnetic coupling.
-  The compensator mass $\sqrt2(1+1/\beta)$ is absorbed into the bare mass in the cosmology, and $\beta$ instead
-  sets the strength $a=1+2/(9\beta)$ of the effective spin–torsion term.
+- **Dirac matter (§5.9).** Eliminating the Dirac-shifted $f$ leaves the contact term
+  $\tfrac\kappa{2\beta}(\sigma^2/6+K_{ab}K^{ab}/8)$, checked on the cosmology (electric $K$) and the soliton (magnetic
+  $K$); $f$ enters only algebraically. Open: states with a pseudoscalar density; the soliton's excited states and
+  stability under the full transport; the conformal weight of the Dirac field under Weyl rescaling; electromagnetic
+  coupling. In both solutions the compensator mass $\sqrt2(1+1/\beta)$ is absorbed into the bare mass, and $\beta$
+  sets the strength of the contact term.
 - **Fundamental versors (§11.1).** Only pure-gauge flatness and transport were examined.
 - **Twistors.** No twistor form of the dynamics, no global twistor space (it exists only for conformally flat or
   half-flat spacetimes), and no two-twistor massive particles.

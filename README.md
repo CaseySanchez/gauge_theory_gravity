@@ -80,6 +80,10 @@ pointwise and checks known solutions against them.
   solution unchanged. With the full twistor transport, eliminating the Dirac-shifted special-conformal field leaves a
   contact term, and the solution keeps its closed form with the mass shifted to $m-\sqrt2(1+1/\beta)$ and the
   spin–torsion term scaled by $1+2/(9\beta)$.
+- **A localized self-gravitating Dirac solution:** the Einstein–Dirac soliton of Finster, Smoller and Yau (two
+  fermions in a singlet) has no total spin, so it solves GTG's equations and, with the Lorentz coupling, every equation
+  of the CSTA. Under the full twistor transport the special-conformal field enters only algebraically; eliminating it
+  gives a four-fermion contact term, and the soliton survives with its spectrum moved by a few per cent.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
@@ -95,8 +99,8 @@ pointwise and checks known solutions against them.
 
 Not established: dynamics for the compensators themselves (11.4 is recovered with them fixed, in second- and
 first-order form); the Weyl-squared admixture without Dirac matter, or with the Lorentz coupling; the scalar and
-vector sectors of the linearization; a localized self-gravitating Dirac solution, the general form of the contact
-term left by the shifted special-conformal field, and matter other than Dirac's; dynamics for the dilation field (11.3); and GTG gauges other
+vector sectors of the linearization; the stability of the self-gravitating Dirac solutions under the full transport,
+and matter other than Dirac's; dynamics for the dilation field (11.3); and GTG gauges other
 than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim
 with its test and tolerance; [DEEP_DIVE.md](DEEP_DIVE.md) explains the construction.
 
@@ -118,8 +122,8 @@ numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's
 ```sh
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
-pytest                                 # 342 tests
-pytest -m slow                         # 21 more, about 60 min on an RTX 3060
+pytest                                 # 359 tests
+pytest -m slow                         # 23 more, about 80 min on an RTX 3060
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
 python -m gauge_theory_gravity.examples.render slices holonomy twistor schwarzschild kerr   # schwarzschild and kerr take about an hour each

@@ -1,8 +1,9 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (342 tests), plus 21 slow tests, `pytest -m slow`
-(about 60 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
-`test_macdowell_mansouri.py`, `test_beyond_einstein.py` and `test_consistency_loop.py`. Demos:
+All checks below are executable: `source .venv/bin/activate && pytest` (359 tests), plus 23 slow tests, `pytest -m slow`
+(about 80 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
+`test_macdowell_mansouri.py`, `test_beyond_einstein.py`, `test_consistency_loop.py`, `test_fsy_csta.py` and
+`test_fsy_full_transport.py`. Demos:
 `cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about 2.5 hours each at 640×360 with 2×2 rays per pixel on an RTX 3060).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
@@ -433,6 +434,43 @@ psi = sqrt(rho) e^{I beta/2} e^{-I sigma_3 chi} L, rho' = -3 rho H, chi' = m cos
   mass does not fix beta. beta fixes a, the strength of the effective spin-torsion term (a = 7/9 at beta = -1, zero
   at beta = -2/9).
 
+## A localized self-gravitating Dirac solution (docs/PLAN_DIRAC_SOLITON.md; `tests/fsy_solution.py`, `test_fsy_solution.py`, `test_fsy_csta.py`, `test_fsy_full_transport.py`)
+
+The reference is the Einstein-Dirac soliton of Finster, Smoller and Yau (Phys. Rev. D 59 (1999) 104020): two fermions
+in the singlet, static and spherically symmetric, ds^2 = dt^2/T^2 - dr^2/A - r^2 dOmega^2, their equations (5.4)-(5.7)
+for alpha, beta, A, T, shot from the origin with T(0) = 1 and m = 1 and scaled as in their section 6. The fields are
+Chebyshev fits on an interval away from the origin, so checks hold to the fit's floor (about 1e-10 for the Einstein
+rows), not 1e-12.
+
+* **In the oracle** (`test_fsy_solution.py`). FSY's ground states: omega_0 = 1.0711161774 (alpha_1 = 0.02) and
+  1.5134807004 (alpha_1 = 0.1, A down to 0.61); nodeless, decaying, bound after scaling (omega~ < m~), and lighter
+  than 2 m~ (their figures 7 and 10). Their Dirac-representation spinors map to the STA exactly (gamma_mu as
+  gamma_mu psi gamma_0, i as right multiplication by I sigma_3). Each fermion's spin is 1.6e-3, the singlet's sum
+  2e-19, so there is no contorsion. LDG's spinor, h and Omega equations for the two fermions vanish with kappa = 8 pi
+  (1e-12, 1.2e-11, 1e-16) at r = 0.84, 1.7, 2.6: FSY's torsion-free solution is a GTG solution. kappa = 4 pi, m = 1.05,
+  or one fermion alone fail.
+* **In the CSTA, Lorentz coupling** (`test_fsy_csta.py`). The coframe is identity plus (1/T - 1) on the time part and
+  (1/sqrt A - 1) times the radial projector, inverted in closed form. With Levi-Civita, f = e/beta and the two
+  fermions' matter rows summed, all 60 connection rows (5e-11) and both spinor rows (3e-14) vanish at r = 1.7, and at
+  r = 2.6 (slow). Each fermion's spin source (0.23 at r = 1.7) cancels the other's.
+* **In the CSTA, full twistor transport** (`test_fsy_full_transport.py`). The special-conformal current is
+  C_ab = (sqrt 2/4)(sigma eta_ab + K_ab), K_ab = <(gamma_a ^ gamma_b) I psi I sigma_3 ~psi>, the dual of the spin
+  bivector (exact). On the singlet it is sqrt 2 sigma / 4 on the diagonal, sigma = 2 T (alpha^2 - beta^2)/r^2, plus a
+  magnetic part orthogonal to the radius, K = 4 T alpha beta / r^2. f enters the action only algebraically, so its
+  gradients never enter (without the MacDowell-Mansouri term), and eliminating it gives GTG with
+  m0 = m - sqrt 2 (1 + 1/beta) and the contact term (kappa / 2 beta)(sigma^2/6 + K_ab K^ab/8) everywhere; the magnetic K
+  fixes the invariant contraction, which the cosmology's electric K could not. On the singlet: the mass
+  m0 - kappa sigma/(6 beta), the radial term 1/r - kappa K/(4 beta) (an anomalous radial moment) and the contact energy
+  in Einstein's equations. A local solution solves the oracle with the contact term (7e-11, 5e-10) and not without
+  (0.3). The ground state at beta = 4, alpha_1 = 0.1, m0 = 1 (bare m = 2.768), omega_0 = 1.4976695441, solves the
+  effective oracle and every CSTA row under the full transport, with the bare mass and f shifted by the total C (slow;
+  P 2e-9, spinor 2e-12).
+* **The family under the full transport.** The equations scale like FSY's with m0 in place of m. For beta = 4, 1, -1,
+  -0.5 every alpha_1 in 0.02-0.2 has a nodeless bound ground state; the contact term moves the spectrum by 1-5%. beta > 0
+  (attractive) lowers the family's largest m0~ from 0.602 (FSY) to 0.598 (beta = 4) and 0.588 (beta = 1); beta < 0
+  raises it to 0.616 (beta = -1) and 0.630 (beta = -0.5). The bare mass absorbs sqrt 2 (1 + 1/beta), as in the
+  cosmology; beta sets the contact strength.
+
 ## Not done / not established (be careful when citing)
 
 * **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the
@@ -447,11 +485,10 @@ psi = sqrt(rho) e^{I beta/2} e^{-I sigma_3 chi} L, rho' = -3 rho H, chi' = m cos
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
   then checked for Schwarzschild between the PG and Kerr-Schild gauges (section above). GTG's field equations with
   Dirac matter were checked pointwise against an LDG oracle (section "GTG with Dirac matter"), and one
-  self-gravitating solution, a homogeneous cosmology, solves them and the CSTA's (section above). Not checked: Doran's
-  spinning PG gauge of Kerr; a localized self-gravitating Dirac solution (Finster-Smoller-Yau); the contact term left
-  by the Dirac-shifted f away from the homogeneous state (derived in general, checked only there); the CLDG
-  antiparticle bounce and the extremal case 4 m^2 = 3 Lambda; the conformal weight of the Dirac field; electromagnetic
-  coupling.
+  self-gravitating solutions, a homogeneous cosmology and the Finster-Smoller-Yau soliton, solve them and the CSTA's
+  (sections above). Not checked: Doran's spinning PG gauge of Kerr; the soliton's excited states and stability under
+  the full transport; the contact term with a nonzero pseudoscalar density; the CLDG antiparticle bounce and the
+  extremal case 4 m^2 = 3 Lambda; the conformal weight of the Dirac field; electromagnetic coupling.
 * **Dilation gauge field b** is zero in Tier B. Nonzero b examined: the pure gauge b = d lambda of a Weyl rescaling,
   and a b with curl, which drops out of the first-order action and of the Dirac action. Its dynamics and gauge fixing
   were not explored (spec 11.3).

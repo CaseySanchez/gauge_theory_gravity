@@ -1609,6 +1609,35 @@ compensator mass is absorbed into the bare mass, so the fermion mass
 does not fix \(\beta\); \(\beta\) fixes the strength \(a\) of the
 effective spin--torsion term.
 
+\subsection{A Localized Solution}
+
+Finster, Smoller and Yau \cite{FSY} found static, spherically symmetric
+Einstein--Dirac solitons: two fermions in the singlet, with
+\(ds^2=dt^2/T^2-dr^2/A-r^2d\Omega^2\). The singlet's total spin
+vanishes, so the contorsion does too and their torsion-free solution is
+a GTG solution. In the CSTA the coframe is identity plus \((1/T-1)\) on
+the time part and \((1/\sqrt A-1)\) times the radial projector; with
+Levi-Civita, \(f=e/\beta\), the Lorentz coupling and the two fermions
+summed, every equation holds.
+
+Under the full transport the special-conformal current is
+\[
+    C_{ab}=\frac{\sqrt2}4\left(\sigma\,\eta_{ab}+K_{ab}\right),\qquad
+    K_{ab}=\grade{(\gamma_a\wedge\gamma_b)\,I\psi I\sigma_3\rev\psi}{0},
+\]
+the dual of the spin bivector. The field \(f\) enters \(S_1\), \(S_2\)
+and the Dirac coupling only algebraically, so its gradients never
+enter; eliminating it gives, everywhere, GTG with the mass \(m_0\) and
+the contact term
+\[
+    \frac\kappa{2\beta}\left(\frac{\sigma^2}6+\frac{K_{ab}K^{ab}}8\right)
+\]
+in the matter Lagrangian. On the singlet \(K\) is magnetic, and
+Finster, Smoller and Yau's equations gain a density-dependent mass, an
+anomalous radial term and the contact energy. Their ground states
+survive for every \(\beta\) tried, with the spectrum moved by a few per
+cent, and solve every equation of the CSTA.
+
 % --------------------------------------------------
 \section{Open Questions}
 \label{sec:questions}
@@ -1630,8 +1659,7 @@ metric. Does it represent Doran and Lasenby's \(h(a)\), with its
 fiducial flat background, in general? Open cases include Doran's
 spinning Painlev\'e--Gullstrand gauge of Kerr. GTG's field equations
 with Dirac matter hold pointwise (Section~\ref{sec:dirac}), and a
-homogeneous Dirac cosmology solves them; localized self-gravitating
-solutions are not constructed.
+homogeneous Dirac cosmology and a localized soliton solve them.
 
 \subsection{The Dilation Field}
 
@@ -1656,10 +1684,9 @@ adds a massive spin-2 ghost of mass \(m^2=-1/(24\alpha)\). Open:
     \item dynamics for the compensators, which are fixed in both the
     second- and first-order forms;
     \item the physical meaning of \(\beta\);
-    \item matter other than Dirac's, the general form of the contact
-    term left by the Dirac-shifted special-conformal field (checked
-    only on the homogeneous cosmology), and the conformal weight of
-    the Dirac field.
+    \item matter other than Dirac's, the stability of the
+    self-gravitating Dirac solutions under the full transport, and the
+    conformal weight of the Dirac field.
 \end{itemize}
 
 \subsection{Twistors}
@@ -1829,6 +1856,9 @@ self-consistently to gravity}, Gen.\ Rel.\ Grav.\ \textbf{29} (1997)
 \bibitem{Leong} B.~Leong, \emph{Spin-torsion, braneworlds and changing
 symmetry in the universe}, PhD thesis, University of Cambridge (2002),
 arXiv:gr-qc/0311016.
+\bibitem{FSY} F.~Finster, J.~Smoller and S.-T.~Yau, \emph{Particle-like
+solutions of the Einstein--Dirac equations}, Phys.\ Rev.\ D
+\textbf{59} (1999) 104020, arXiv:gr-qc/9801079.
 \end{thebibliography}
 
 \end{document}

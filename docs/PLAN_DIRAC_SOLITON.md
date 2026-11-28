@@ -186,3 +186,6 @@ README: the soliton under both couplings, and what the full transport's gradient
     0.616 (β = −1) and 0.630 (β = −0.5). At α₁ = 0.1, β = 4: ω₀ = 1.4976695441, against FSY's 1.5134807004.
   - **The scale question.** As in the cosmology, the rows see only m₀. The bare mass `m₀ + √2(1 + 1/β)` is not
     constrained, and β = −1 is not special beyond `m₀ = m`. β sets the contact strength ∝ 1/β.
+- Phase 3: done. RESULTS.md has a new section, "A localized self-gravitating Dirac solution", and DEEP_DIVE §5.9, §10
+  and §11, the README and the LaTeX formulation (§13.5, open questions, the FSY citation) are updated. Counts: 359 fast
+  tests and 23 slow.
