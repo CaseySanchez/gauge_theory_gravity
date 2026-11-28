@@ -73,7 +73,7 @@ Steps:
 
 The static, spherically symmetric Einstein–Dirac solitons of Finster, Smoller and Yau need two fermions in a singlet
 for spherical symmetry, and a numerical boundary-value solve. They test the same equations with gradients, where
-the CSTA's `e∧Dφ` terms (PLAN_DIRAC phase 6) matter. Plan separately once Phases 0–2 settle the cosmological case.
+the CSTA's `e∧Dφ` terms (PLAN_DIRAC phase 6) matter. Planned in docs/PLAN_DIRAC_SOLITON.md.
 
 ## Phase 4: documentation
 
@@ -140,7 +140,7 @@ transport changes in it.
     mass does not force β ≈ −1. What β does fix is a, the strength of the effective spin–torsion term: a = 7/9 at
     β = −1, and the term cancels at β = −2/9. A real `√a` needs β > 0 or β < −2/9. For a ≤ 0 the closed form changes
     (not covered).
-- Phase 3 (stretch, the localized Finster–Smoller–Yau solution): not started.
+- Phase 3 (stretch, the localized Finster–Smoller–Yau solution): planned in docs/PLAN_DIRAC_SOLITON.md.
 - Phase 4: done. RESULTS.md has a new section, "A self-gravitating Dirac solution", and DEEP_DIVE §5.9, §10 and §11, the
   README and the LaTeX formulation (§13.4, open questions, the CLDG and Leong citations) are updated. Counts: 342 fast
   tests and 21 slow.
