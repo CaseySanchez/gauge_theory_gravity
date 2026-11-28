@@ -147,3 +147,18 @@ README: the soliton under both couplings, and what the full transport's gradient
     action vanish at three events (r = 0.84, 1.7, 2.6): spinor 1e-12, h 1.2e-11 (the fit floor), Ω 1e-16. So FSY's
     torsion-free solution is a GTG solution as it stands, and their conventions and normalization match LDG's.
     κ = 4π, m = 1.05, or one fermion alone fail by 0.05 to 0.5.
+- Phase 1: done (`Soliton.geometry`, `csta_spinor`, `csta_connection` in `tests/fsy_solution.py`;
+  `tests/test_fsy_csta.py`, 2 tests plus 1 slow, about 8 minutes per event).
+  - **The coframe.** It is the identity plus `(1/T − 1)` on the time part plus `(1/√A − 1)P`, with P the radial
+    projector `−x (x·)_η / r²`. The closed-form inverse is exact (1e-16), and it equals the oracle's coframe.
+  - **All rows vanish.** With Levi-Civita, no contorsion, `f = e/β`, `γ = 1/β` (β = 4), the Lorentz coupling and the
+    two fermions' matter rows summed, the rows of `S₁ + βS₂ + γS₃ + 4κ|det e|(L₁ + L₂)` come out at:
+    - M: 2e-16. Each fermion's spin source is ±0.228 and they cancel.
+    - P: 5e-11, the fit floor.
+    - K: 9e-15. D: 0.
+    - Spinor rows: 3e-14.
+  - **A second radius.** At r = 2.6 (slow test) the total is 1.5e-11, the spinor rows 9e-15, and each spin source
+    0.072.
+  - **Negative check.** One fermion at the singlet's total density fails the M rows (0.46 at r = 1.7, 0.14 at
+    r = 2.6).
+  - This is the first localized self-gravitating solution in the repo, with gradients in every direction.

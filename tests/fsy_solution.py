@@ -21,6 +21,10 @@ In Cartesian coordinates FSY's Dirac matrices G^j (2.14)-(2.17) are the frame E_
 radial dyad. Their Dirac-representation spinors map to the STA as in Doran and Lasenby: an upper Pauli spinor
 (a0 + i a3, -a2 + i a1) is a0 + a_k I sigma_k, the column (phi, eta) is phi + eta sigma_3, i is right multiplication by
 I sigma_3, and gamma_mu acts as gamma_mu psi gamma_0 (checked in `test_fsy_solution`).
+
+The same fields in the CSTA (`geometry`, `csta_spinor`, `csta_connection`): the coframe as identity plus the radial
+dyad (1/sqrt A - 1) P and (1/T - 1) on the time part, P(v) = x (x.v)/r^2 = -x (x . v)_eta / r^2 the radial projector,
+with its closed-form inverse; Z_a = dirac.from_sta(psi_a).
 """
 from __future__ import annotations
 
@@ -32,7 +36,7 @@ import numpy as np
 from numpy.polynomial import chebyshev
 from scipy.integrate import solve_ivp
 
-from gauge_theory_gravity import algebra as al
+from gauge_theory_gravity import algebra as al, cartan, conformal as cf, dirac as dr
 
 mv = al.mv
 GAMMA = al.SPACETIME
@@ -183,3 +187,34 @@ class Soliton:
     def spinors(self, x4):
         """[2, 32]: the two STA spinors' kernels."""
         return jnp.stack([psi.kernel for psi in self.spinor_multivectors(x4)])
+
+    # --- the same fields in the CSTA, functions of a position --------------------------------------------------------
+    @staticmethod
+    def _x4(position):
+        return jnp.stack([cartan.coordinate(position, m).kernel.reshape(()) for m in range(4)])
+
+    def _parts(self, position):
+        """(A, T, P): the profile at the position's radius and the radial projector Direction <- Direction."""
+        spatial = cartan.SpacePart(position)                                     # [] Direction, squares to -r^2
+        r = jnp.sqrt(-spatial.squared().kernel.reshape(()))
+        _, _, A, T = self.profile(r)
+        projector = (-1 / r ** 2) * spatial * (spatial.dual_inverse() & al.Direction)
+        return A, T, projector
+
+    def geometry(self):
+        def coframe(position):
+            A, T, P = self._parts(position)
+            return al.Direction + (1 / T - 1) * cartan.TimePart + (1 / jnp.sqrt(A) - 1) * P
+
+        def frame(position):
+            A, T, P = self._parts(position)
+            return al.Direction + (T - 1) * cartan.TimePart + (jnp.sqrt(A) - 1) * P
+        return cartan.Geometry(coframe, frame)
+
+    def csta_spinor(self, k):
+        """position -> Z_k = dirac.from_sta(psi_k), k = 0, 1."""
+        return lambda position: dr.from_sta(self.spinor_multivectors(self._x4(position))[k])
+
+    def csta_connection(self, special):
+        """Levi-Civita, the coframe and the special-conformal field: the singlet's spin vanishes, so no contorsion."""
+        return cf.connection(self.geometry(), special)
