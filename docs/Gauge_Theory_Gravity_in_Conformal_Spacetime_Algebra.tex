@@ -1421,6 +1421,155 @@ fraction of small-loop holonomies follows
 \(a=0\), largest near the poles.
 
 % --------------------------------------------------
+\section{Dirac Matter}
+\label{sec:dirac}
+% --------------------------------------------------
+
+Gauge Theory Gravity is distinguished from general relativity by its
+coupling to Dirac fields: the spin of the matter sources torsion
+\cite[Sections 3--4]{LDG}. This section carries Lasenby, Doran and Gull's Dirac
+action into the first-order form of Section~\ref{sec:dynamics} and
+checks it against an independent implementation of their formulas.
+
+\subsection{Spinors as Twistors}
+
+A Dirac spinor is a twistor \(Z\in\G^+P\). The Dirac algebra acts
+through
+\[
+    \boxed{
+        \Gamma_a=I\,\e_a\,p,
+        \qquad
+        p=\tfrac1{\sqrt2}\left(\nzero+\ninf\right)
+        =\tfrac1{\sqrt2}\left(X+\mathcal I\right),
+    }
+\]
+which satisfy \(\{\Gamma_a,\Gamma_b\}=2\eta_{ab}\) and
+\(\Gamma_a\Gamma_b=\e_a\e_b\) for \(a\ne b\). The Lorentz sector
+therefore acts on \(Z\) as GTG's rotation gauge field acts on its
+spinor, and the twistor norm is the Dirac bar pairing,
+\(h(Z_1,Z_2)=\bar\psi_1\psi_2\). The other generators act
+algebraically:
+\[
+    \nzero\wedge\ninf=\gamma_5,
+    \qquad
+    P_a=-\sqrt2\,I\,\Gamma_a\Pi_+,
+    \qquad
+    K_a=-\sqrt2\,I\,\Gamma_a\Pi_-,
+    \qquad
+    \Pi_\pm=\tfrac12(1\pm\gamma_5),
+\]
+so the \(\omega\) and \(\pi\) halves of a twistor are its Weyl
+spinors. The map \(Z=\psi\,Z_0\) from the even spacetime algebra, with
+\(Z_0\) the unit twistor fixed by \(\Gamma_0Z_0=Z_0\) and
+\(\e_y\e_xZ_0=IZ_0\), carries \(\gamma_\mu\psi\gamma_0\mapsto\Gamma_\mu Z\),
+\(\psi I\sigma_3\mapsto IZ\), and every bilinear. In particular
+\(\grade{\psi\rev\psi}{0}\mapsto h(Z,Z)\) and
+\(\grade{\gamma^a\phi I\gamma_3\rev\psi}{0}\mapsto
+\operatorname{Re}h(Z_\psi,I\Gamma^aZ_\phi)\).
+
+\subsection{The Action}
+
+The Dirac density of a connection is
+\[
+    \boxed{
+        \mathcal L_D=|\det e|\left(
+        \operatorname{Re}h\left(Z,I\Gamma^a\D_{E_a}Z\right)-m\,h(Z,Z)
+        \right),
+    }
+\]
+with the coframe read from \(\D X\) and \(E_a\) its frame. The
+transport \(\D\) is either the full twistor transport (all fifteen
+generators acting on \(Z\)) or its Lorentz sector, the stabilizer of
+\(X\) and \(\mathcal I\). The Lorentz coupling is Lasenby, Doran and
+Gull's \cite[(3.56)]{LDG}. The full transport adds the \(h\)-Hermitian
+part of \(\tfrac12I\Gamma^a(\Om-\Om_M)(E_a)\):
+\[
+    \sqrt2\,\sigma
+    +\tfrac{\sqrt2}4\left(\operatorname{tr}F\,\sigma+F^{ab}T_{ab}\right),
+    \qquad
+    \sigma=\bar\psi\psi,
+    \quad
+    T_{ab}=\bar\psi\sigma_{ab}(1-\gamma_5)\psi,
+    \quad
+    F=fe^{-1},
+\]
+from the translation and special-conformal sectors; the dilation
+sector adds nothing. For \(f=ke\) this is a parity-even mass made of
+the compensators, \(m\mapsto m-\sqrt2(1+k)\). With LDG's \(R\), which
+has the sign used here, their action
+\(\det(h)^{-1}(\tfrac12R-\kappa L_D)\) is
+\[
+    \boxed{
+        S_1+\beta S_2+\gamma S_3+4\kappa\,\mathcal L_D
+    }
+\]
+up to a factor \(-4\).
+
+\subsection{Field Equations}
+
+\textbf{Dirac equation.} Varying \(Z\) gives
+\[
+    I\Gamma^a\D_aZ+\tfrac12I\Gamma(\tau)Z=mZ,
+    \qquad
+    \tau_b=-T^a{}_{ab},
+    \qquad
+    T(a,b)=-\nzero\rfloor\F_P(a,b),
+\]
+with \(\F_P\) the translation-sector curvature of the Lorentz and
+translation parts of \(\Om\). (The dilation part would add \(b\wedge e\),
+which the Dirac field does not see.) With the Lorentz coupling this is
+LDG's coupled Dirac equation \cite[(3.62)]{LDG} component by
+component. It is minimally coupled exactly when the torsion trace
+vanishes.
+
+\textbf{Sources.} The Dirac part of \(\delta S/\delta\Om\) is, sector by
+sector:
+\begin{itemize}
+    \item Lorentz: \(|\det e|\,S\cdot g^\mu\), with
+    \(S=\tfrac12\psi I\gamma_3\rev\psi\) and \(g^\mu=\bar h(e^\mu)\). This
+    is LDG's spin tensor \(S\cdot\bar h(a)\).
+    \item Translation: \(-|\det e|\,E^\mu{}_b\,\mathcal T^b{}_a\), with
+    \(\mathcal T(a)=\grade{a\cdot\D\psi\,I\gamma_3\rev\psi}{1}-a\,L\), LDG's
+    stress-energy \cite[(4.20)]{LDG}.
+    \item Special conformal: zero for the Lorentz coupling; for the full
+    transport \(|\det e|\,E^\mu{}_bC^b{}_a\), with
+    \(C^b{}_a=\operatorname{Re}h(Z,\tfrac12I\Gamma^bK_aZ)\).
+    \item Dilation: zero.
+\end{itemize}
+
+\textbf{Spin--torsion.} Levi-Civita plus LDG's contorsion,
+\(\Om(\partial_\mu)\mapsto\Om(\partial_\mu)+\tfrac12\kappa\,g_\mu\cdot S\),
+solves the Lorentz equations under either transport. The torsion is
+\[
+    \boxed{
+        T(a,b)=\kappa\,(a\wedge b)\cdot S,
+    }
+\]
+the spin density, and it is traceless. So the minimally coupled action
+gives the minimally coupled equation, LDG's consistency
+loop \cite[(4.32)--(4.35)]{LDG}.
+
+\textbf{The special-conformal field.} Under the full transport, with
+\(S_2=-2\sqrt g\left((\operatorname{tr}F)^2-F^a{}_bF^b{}_a\right)\), the
+special-conformal equation is solved by
+\[
+    F^b{}_a=\frac1\beta\left(1+\frac\kappa3\operatorname{tr}C\right)
+    \delta^b_a-\frac\kappa\beta\,C^b{}_a,
+    \qquad
+    \operatorname{tr}C=\sqrt2\,\sigma:
+\]
+the Dirac field moves \(f\) away from \(e/\beta\).
+
+\textbf{The quadratic action.} Adding
+\(\alpha\grade{\F\wedge\F\wedge X\wedge\mathcal I}{}\), whose
+\(R\wedge R\) part is the Euler density, adds
+\(\alpha\,\epsilon(T\wedge f-e\wedge\D f)\) to the Lorentz equations.
+With the Lorentz coupling \(f\propto e\), and the term only rescales
+\(S_1\)'s: the loop holds for every \(\alpha\). With the full transport
+the Dirac-shifted \(f\) varies in space, and the torsion acquires a trace
+linear in \(\alpha\). Dirac matter then requires \(\alpha=0\).
+
+% --------------------------------------------------
 \section{Open Questions}
 \label{sec:questions}
 % --------------------------------------------------
@@ -1439,8 +1588,9 @@ their derivatives?
 The translation sector is an orthonormal coframe of a torsion-free
 metric. Does it represent Doran and Lasenby's \(h(a)\), with its
 fiducial flat background, in general? Open cases include Doran's
-spinning Painlev\'e--Gullstrand gauge of Kerr and GTG's own field
-equations.
+spinning Painlev\'e--Gullstrand gauge of Kerr. GTG's field equations
+with Dirac matter hold pointwise (Section~\ref{sec:dirac}); no
+self-gravitating Dirac solution has been constructed.
 
 \subsection{The Dilation Field}
 
@@ -1455,7 +1605,9 @@ relativity with a cosmological constant, and a Weyl-squared admixture
 adds a massive spin-2 ghost of mass \(m^2=-1/(24\alpha)\). Open:
 \begin{itemize}
     \item whether \(\alpha=0\), or the quadratic term is an effective
-    correction below \(m\);
+    correction below \(m\), without Dirac matter or with the Lorentz
+    coupling (with the full transport, Dirac matter requires
+    \(\alpha=0\));
     \item the scalar and vector sectors of the linearization, and the
     linearization of the first-order action;
     \item whether every Cotton-free solution of the coframe equation of
@@ -1463,7 +1615,9 @@ adds a massive spin-2 ghost of mass \(m^2=-1/(24\alpha)\). Open:
     \item dynamics for the compensators, which are fixed in both the
     second- and first-order forms;
     \item the physical meaning of \(\beta\);
-    \item matter couplings.
+    \item matter other than Dirac's, the four-fermion terms left by the
+    Dirac-shifted special-conformal field, and the conformal weight of
+    the Dirac field.
 \end{itemize}
 
 \subsection{Twistors}
@@ -1621,5 +1775,11 @@ it twistor space and Penrose's local twistor transport.
 
 The displacement and rotational gauge structures of conventional GTG
 thus form a constrained sector of the conformal formulation.
+
+\begin{thebibliography}{9}
+\bibitem{LDG} A.~Lasenby, C.~Doran and S.~Gull, \emph{Gravity, gauge
+theories and geometric algebra}, Phil.\ Trans.\ R.\ Soc.\ Lond.\ A
+\textbf{356} (1998) 487--582, arXiv:gr-qc/0405033.
+\end{thebibliography}
 
 \end{document}

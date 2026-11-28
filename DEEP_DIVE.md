@@ -427,6 +427,54 @@ $-\sqrt g\,C^2$ at the normal connection, and its equations give Weyl gravity wi
 $\mu$ to the Einstein action, it keeps the Einstein solutions and shifts the special-conformal field to
 $f=\tfrac{1-4\mu\gamma}{\beta}\,e$.
 
+### 5.9 Dirac matter (`dirac.py`)
+
+A Dirac spinor is a twistor $Z\in\mathrm{Even}\,P$ (§6.1). The Dirac algebra acts through
+
+```math
+\Gamma_a=I\,e_a\,p,\qquad p=\tfrac1{\sqrt2}(n_o+n_\infty)=\tfrac1{\sqrt2}(X+I_\infty),
+```
+
+which satisfy $\{\Gamma_a,\Gamma_b\}=2\eta_{ab}$ and $\Gamma_a\Gamma_b=e_ae_b$ ($a\ne b$). So the Lorentz sector acts on $Z$
+as GTG's rotation gauge field acts on $\psi$, and the twistor norm $h$ is the Dirac bar pairing: $h(Z,\Gamma_0Z)>0$, and
+the Fierz identities hold. The other sectors act algebraically. The dilation generator $n_o\wedge n_\infty$ is
+$\gamma_5$, and the $\omega,\pi$ halves are the Weyl spinors. A translation is $P_a=-\sqrt2\,I\Gamma_a\Pi_+$ and a
+special conformal transformation $K_a=-\sqrt2\,I\Gamma_a\Pi_-$, with $\Pi_\pm$ the chiral projectors.
+
+Lasenby, Doran and Gull's spinor maps to $Z=\psi\,\mathrm{REFERENCE}$ (`from_sta`), where REFERENCE is the unit twistor
+with $\Gamma_0Z=Z$ and $e_ye_xZ=IZ$. The map carries $\gamma_\mu\psi\gamma_0\to\Gamma_\mu Z$, $\psi I\sigma_3\to IZ$, every
+bilinear, and their kinetic form, so their Dirac Lagrangian is $\mathrm{Re}\,h(Z,I\Gamma^aD_aZ)-m\,h(Z,Z)$.
+
+`density(omega, spinor, x, mass, which)` is $|\det e|$ times that Lagrangian. The coframe is read from $DX$ with its
+compensator components removed (`coframe_of`), and $D$ is the full twistor transport (`which="full"`, the target) or
+its Lorentz sector (`"lorentz"`, LDG's coupling and the reference). `euler_lagrange_spinor` and
+`euler_lagrange_connection` vary it with the operator of §5.7. The results, all checked against the independent oracle
+`tests/gtg_dirac_reference.py` (LDG's own formulas, numpy for $\bar h$):
+
+- **Dirac equation** (`spinor_equation`): $I\Gamma^aD_aZ+\tfrac12I\Gamma(\tau)Z=mZ$, LDG's (3.62).
+  `torsion_trace` reads $\tau$ from the translation-sector curvature of the Lorentz and translation parts of
+  $\Omega$, $\tau_b=-T^a{}_{ab}$ with $T(a,b)=-n_o\rfloor F_P(a,b)$. The dilation part has to be left out: $[D,P]\propto P$
+  puts $b\wedge e$ into $F_P$, and the Dirac field does not see $b$.
+- **Full transport.** The other sectors add the $h$-Hermitian part of $O=\tfrac12I\Gamma^a(\Omega-\Omega_M)(E_a)$ (the
+  reverse is the $h$-adjoint). The P sector gives $\sqrt2\,\sigma$ for any coframe, $\sigma=\bar\psi\psi$. The K sector gives
+  $(\sqrt2/4)(\mathrm{tr}F\,\sigma+F^{ab}T_{ab})$ with $T_{ab}$ the tensor bilinear $\bar\psi\sigma_{ab}(1-\gamma_5)\psi$, and
+  D gives nothing. For $f=ke$ this is a parity-even mass made from the compensators, $m\to m-\sqrt2(1+k)$.
+- **Sources** of the connection equation: Lorentz rows $|\det e|\,S\cdot g^\mu$, LDG's spin tensor $S\cdot\bar h(a)$ with
+  $S=\tfrac12\psi I\gamma_3\tilde\psi$ (`spin_trivector`). Translation rows $-|\det e|E^\mu{}_bT^b{}_a$, with
+  $\mathcal T(a)=\langle a\cdot D\psi I\gamma_3\tilde\psi\rangle_1-aL$ (`stress_energy`). Under the full transport, $D$
+  there omits the P sector, whose action does not depend on $e$. Special-conformal rows: zero for the Lorentz coupling,
+  the current $C$ for the full transport (`special_conformal_current`). Dilation rows: zero.
+- **Spin–torsion.** The action is $S_1+\beta S_2+\gamma S_3+4\kappa|\det e|L_D$: LDG's
+  $\det(h)^{-1}(\tfrac12R-\kappa L_D)$ times $-4$, since their $R$ has the repo's sign. Levi-Civita plus their contorsion
+  $\tfrac12\kappa\,g_\mu\cdot S$ solves the Lorentz rows. The torsion is $\kappa(a\wedge b)\cdot S$ and traceless, so the
+  spinor equation is minimally coupled. Under the full transport the K equation, with
+  $S_2=-2\sqrt g\,((\mathrm{tr}F)^2-F^a{}_bF^b{}_a)$, is solved by
+  $F^b{}_a=\tfrac1\beta(1+\tfrac\kappa3\mathrm{tr}C)\delta^b_a-\tfrac\kappa\beta C^b{}_a$, with $\mathrm{tr}\,C=\sqrt2\,\sigma$.
+- **Consistency loop** with $\alpha\langle F\wedge F\wedge X\wedge I\rangle$ added. Its $R\wedge R$ part is the Euler
+  density, so the Lorentz equation gains $\alpha\,\epsilon(T\wedge f-e\wedge Df)$. With the Lorentz coupling $f\propto e$, the
+  term only rescales $S_1$'s, and the loop holds for every $\alpha$. With the full transport the Dirac-shifted $f$ varies in
+  space, and the torsion acquires a trace linear in $\alpha$, so the minimally coupled equation fails unless $\alpha=0$.
+
 ---
 
 ## 6. Twistors (`twistor.py`)
@@ -726,13 +774,22 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
 | first-order action: Einstein solutions, $\Lambda=6(\gamma-1/\beta)$, normal connection at $\gamma=0$, non-solutions | `test_first_order.py` | 1e-13 to 1e-14 |
 | $\langle F\wedge F\wedge X\wedge I\rangle=-\sqrt g\,C^2$; Cotton condition; FRW solves, rescaled Schwarzschild does not | `test_macdowell_mansouri.py` | 1e-13 to 1e-14 |
 | quadratic admixture keeps Einstein solutions; linearized TT modes $-2k^2$ and $4k^4$ | `test_beyond_einstein.py` | 1e-13; 1e-6 to 1e-8 |
+| Dirac algebra on twistors, $\gamma_5=n_o\wedge n_\infty$, chiral $P$ and $K$, bar pairing, Fierz; the map from LDG's spinor; sector terms in the action; $S_1,S_2,S_3$ normalization | `test_dirac_conventions.py` | 1e-11 to 1e-15 |
+| flat Dirac equation and plane waves; full transport is a compensator mass shift; local Lorentz invariance | `test_dirac_action.py` | 1e-10 to 1e-12 |
+| oracle: LDG's closed $\omega$ is Levi-Civita, $R$ sign, their action gives (3.62), Dirac density equals the CSTA one | `test_gtg_dirac_reference.py` | 1e-12 to 1e-14 |
+| spinor equation is LDG's blade by blade; $\tau$ from $F_P$; closed form for both transports | `test_dirac_equation.py` | 1e-12 to 1e-13 |
+| spin, stress-energy, special-conformal and dilation sources of the connection equation | `test_dirac_sources.py` | 1e-12 to 1e-13 |
+| LDG contorsion solves the Lorentz rows; torsion $=\kappa(a\wedge b)\cdot S$, traceless; Dirac-shifted $f$ | `test_spin_torsion.py` | 1e-12 |
+| with $\alpha\langle F\wedge F\wedge X\wedge I\rangle$: loop kept by the Lorentz coupling, broken linearly in $\alpha$ by the full transport (slow) | `test_consistency_loop.py` | 1e-11 to 1e-13; 5% linearity |
 
 ---
 
 ## 11. Limits and open questions
 
-- **Dynamics.** The code varies chosen actions pointwise (§5.7, §5.8) and checks known geometries against the
-  resulting equations; it does not solve them for new geometries, and there is no matter.
+- **Dynamics.** The code varies chosen actions pointwise (§5.7, §5.8, §5.9) and checks known geometries against the
+  resulting equations; it does not solve them for new geometries. The only matter is Dirac's (§5.9), checked
+  pointwise: no self-gravitating Dirac solution is constructed, and the loop-breaking of §5.9 is shown to first order
+  in $\alpha$.
 - **Einstein gravity (§11.4)** is recovered with the infinity twistor as compensator, while the curvature-squared density
   alone gives Weyl gravity. In second-order form the compensator action $\int\sqrt g\,\sigma^{-4}(I\cdot I+c)$ gives
   Einstein's equations with $\Lambda=-6c$; in first-order form, varying the full connection with $n_o$ and $n_\infty$
@@ -741,7 +798,9 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
   gravity with a Cotton condition, which FRW solves. Adding a quadratic term to an Einstein action keeps the Einstein
   solutions but, linearized about flat space, adds a massive spin-2 ghost, $m^2=-1/(24\alpha)$ for $\alpha\sqrt g\,C^2$.
   Open:
-  - whether the proposal takes $\alpha=0$, or keeps the quadratic term as an effective correction below $m$;
+  - whether the proposal takes $\alpha=0$, or keeps the quadratic term as an effective correction below $m$. With Dirac
+    matter and the full twistor transport, the consistency loop requires $\alpha=0$ (§5.9); with the Lorentz coupling
+    it does not decide;
   - the scalar and vector sectors of the linearization, and the linearization of the first-order action;
   - whether every Cotton-free solution of the quadratic action's coframe equation is Bach-flat;
   - dynamics for the compensators themselves, which are fixed in both forms, and the physical meaning of $\beta$.
@@ -752,7 +811,12 @@ tensor and Weyl squared are compared against it, and it builds the Riemann tenso
   transformation.
 - **The dilation field (§11.3)** is zero except as pure gauge: a Weyl rescaling $e\to e^\lambda e$ is the gauge
   transformation $e^{-\lambda\,n_o\wedge n_\infty/2}e^{\Upsilon\wedge n_o/2}$, $\Upsilon=\nabla\lambda$, of the
-  normal connection, and its dilation factor alone gives $b=d\lambda$. A dilation field with curl is not examined.
+  normal connection, and its dilation factor alone gives $b=d\lambda$. A dilation field with curl drops out of the
+  first-order action and of the Dirac action (§5.9); its own dynamics are not examined.
+- **Dirac matter (§5.9).** Open: the effective four-fermion terms left after eliminating the Dirac-shifted $f$ (a
+  $(\bar\psi\psi)^2$ term through the compensator mass, and $T_{ab}T^{ab}$); the conformal weight of the Dirac field
+  under Weyl rescaling; the physical scale of the compensator mass $\sqrt2(1+\tfrac14\mathrm{tr}F)$ relative to the
+  length the translation sector carries; electromagnetic coupling.
 - **Fundamental versors (§11.1).** Only pure-gauge flatness and transport were examined.
 - **Twistors.** No twistor form of the dynamics, no global twistor space (it exists only for conformally flat or
   half-flat spacetimes), and no two-twistor massive particles.

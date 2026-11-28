@@ -63,6 +63,18 @@ pointwise and checks known solutions against them.
 - **Beyond Einstein (11.4):** adding the quadratic action keeps every Einstein solution (first and second order).
   Linearized about flat space, $\sqrt g\,R$ gives $-2k^2$ and $\sqrt g\,C^2$ gives $4k^4$ on transverse-traceless waves,
   so a Weyl-squared admixture adds Stelle's massive spin-2 ghost; with no admixture the theory is general relativity.
+- **GTG with Dirac matter:** a Dirac spinor is a twistor, with $\Gamma_a=I\,e_a\,p$, $p=(n_o+n_\infty)/\sqrt2$, so the
+  twistor norm is the Dirac bar pairing and $n_o\wedge n_\infty$ is $\gamma_5$. Lasenby, Doran and Gull's spinor maps onto
+  it with every bilinear, and an independent oracle in their own formulas (gr-qc/0405033) checks the rest. With their
+  Lorentz coupling, the CSTA Dirac equation is their coupled equation (3.62), with the torsion trace read from the
+  translation-sector curvature. Its sources are their spin tensor $S\cdot\bar h(a)$ and stress-energy
+  $\langle a\cdot D\psi I\gamma_3\tilde\psi\rangle_1-aL$. Their contorsion $\tfrac12\kappa\,a\cdot S$ solves the
+  first-order equations, so the torsion is the spin density, $\kappa(a\wedge b)\cdot S$, and traceless: the minimally
+  coupled action gives the minimally coupled equation. With the full twistor transport, the target, the other sectors
+  add a parity-even mass made from the compensators, and the Dirac field shifts the special-conformal field by
+  $\bar\psi\psi$ and its tensor bilinear. Adding $\alpha\langle F\wedge F\wedge X\wedge I\rangle$ then gives the torsion a
+  trace linear in $\alpha$, so Dirac matter fixes the Weyl-squared admixture to zero. With the Lorentz coupling it does
+  not.
 - **Ray tracing:** a ray is an event and the local twistor of its light ray, moved by the normal conformal connection
   itself. The twistor stays on its ray (to $3\times10^{-15}$ at the disk). Its momentum is the photon's, exactly null, and
   the phase of $\pi$ fixes a direction across the ray (Penrose's null flag), which carries the camera screen for the
@@ -77,9 +89,10 @@ pointwise and checks known solutions against them.
   accumulated versor.
 
 Not established: dynamics for the compensators themselves (11.4 is recovered with them fixed, in second- and
-first-order form); whether the proposal sets the Weyl-squared admixture to zero or keeps it as an effective
-correction; the scalar and vector sectors of the linearization; matter; a dilation field that is not pure gauge
-(11.3); and GTG gauges other than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim
+first-order form); the Weyl-squared admixture without Dirac matter, or with the Lorentz coupling; the scalar and
+vector sectors of the linearization; a self-gravitating Dirac solution, the four-fermion terms left by the shifted
+special-conformal field, and matter other than Dirac's; dynamics for the dilation field (11.3); and GTG gauges other
+than Kerr–Schild and Painlevé–Gullstrand. [RESULTS.md](RESULTS.md) records every claim
 with its test and tolerance; [DEEP_DIVE.md](DEEP_DIVE.md) explains the construction.
 
 | Schwarzschild | Kerr, $a=0.9$ |
@@ -100,8 +113,8 @@ numga's `examples` package, used by the Kerr cross-check test; `cuda` adds JAX's
 ```sh
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[test]"               # or ".[test,cuda]" for an NVIDIA GPU
-pytest                                 # 250 tests
-pytest -m slow                         # 20 more, about 30 min on an RTX 3060
+pytest                                 # 316 tests
+pytest -m slow                         # 21 more, about 60 min on an RTX 3060
 cd src
 python -m gauge_theory_gravity.examples.scenarios                                # figures in ../output
 python -m gauge_theory_gravity.examples.render slices holonomy twistor schwarzschild kerr   # schwarzschild and kerr take about an hour each
@@ -125,12 +138,13 @@ returned wrong values on the GPU (see RESULTS.md).
 | `compensator.py` | the scale tractor (infinity twistor) of a scale, its tractor derivative, the integrability test for an Einstein scale |
 | `variation.py` | field equations: the pointwise Euler–Lagrange derivative of a coframe density; the determinant as an outermorphism; Einstein–Hilbert, Weyl-squared and compensator densities |
 | `first_order.py` | actions of the full connection with origin and infinity twistor as compensators (first-order Einstein, quadratic MacDowell–Mansouri), and their field equations |
+| `dirac.py` | Dirac spinors as twistors: the Dirac algebra from the compensators, the map from LDG's spinor, bilinears; the Dirac density of a connection (full twistor transport or Lorentz coupling), its spinor equation in closed form, the torsion trace, and the spin, stress-energy and special-conformal sources |
 | `twistor.py` | twistors as a minimal left ideal of the even subalgebra: norm, ω/π split, incidence, light rays, momentum, null flag, positive size, spectra, SU(2,2) matrices, the complex Weyl invariant |
 | `hypersurface.py` | fields on a 4D coordinate grid, hypersurfaces $x^\mu=c$, their layout and extraction |
 | `export.py` | VTKHDF export of hypersurfaces for ParaView: invariants, sector magnitudes and components |
 | `examples/` | scenarios, renders, disk light, ray paths with extrinsic (versor) or intrinsic (twistor) transport (`rays.py`) |
 | `_array/`, `tests/array_reference/` | the first, index-based implementation, kept as an independent oracle |
-| `tests/` | the checks listed in RESULTS.md |
+| `tests/` | the checks listed in RESULTS.md; `gtg_dirac_reference.py` is the LDG oracle for Dirac matter |
 
 ## License
 

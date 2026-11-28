@@ -1,8 +1,8 @@
 # Results log
 
-All checks below are executable: `source .venv/bin/activate && pytest` (250 tests), plus 20 slow tests, `pytest -m slow`
-(about 30 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
-`test_macdowell_mansouri.py` and `test_beyond_einstein.py`. Demos:
+All checks below are executable: `source .venv/bin/activate && pytest` (316 tests), plus 21 slow tests, `pytest -m slow`
+(about 60 min on an RTX 3060), in `test_export.py`, `test_rays.py`, `test_variation.py`, `test_compensator_action.py`,
+`test_macdowell_mansouri.py`, `test_beyond_einstein.py` and `test_consistency_loop.py`. Demos:
 `cd src && python -m gauge_theory_gravity.examples.scenarios` and `python -m gauge_theory_gravity.examples.render [slices holonomy twistor schwarzschild kerr]` (figures in `output/`; schwarzschild and kerr take about 2.5 hours each at 640×360 with 2×2 rays per pixel on an RTX 3060).
 Working algebra: `Algebra("t+x-y-z-p+n-")` = the spec's Cl(2,4), literally. Backend: numga on JAX (float64).
 
@@ -337,24 +337,89 @@ geometries `e E = 1` to 1e-13 and E equals `e.inverse()` to 1e-12; every earlier
   proposal has to make. Only the TT sector was linearized; the scalar and vector sectors, and the first-order action's
   linearization, were not.
 
+## GTG with Dirac matter (docs/PLAN_DIRAC.md; `dirac.py`, `tests/test_dirac_*.py`, `test_gtg_dirac_reference.py`, `test_spin_torsion.py`, `test_consistency_loop.py`)
+
+Reference: Lasenby, Doran and Gull, *Gravity, gauge theories and geometric algebra* (gr-qc/0405033), cited as LDG.
+The oracle `tests/gtg_dirac_reference.py` implements their formulas in the spacetime algebra (the t, x, y, z
+subalgebra, whose signature is theirs) with numpy matrices for h_bar and none of the CSTA machinery.
+
+* **Spinors as twistors** (`test_dirac_conventions.py`). Gamma_a = I e_a p, p = (n_o + n_inf)/sqrt 2, satisfy the
+  Clifford relation on twistors (2e-16). Gamma_a Gamma_b = e_a e_b, so the Lorentz sector acts as GTG's rotation gauge
+  field. The twistor norm is the Dirac bar pairing: J^0 > 0, J timelike, Fierz J^2 = sigma^2 + omega^2 = -A^2,
+  J . A = 0 (1e-11 relative). n_o ^ n_inf is gamma_5 and the omega/pi halves are the Weyl spinors; P_a = -sqrt 2 I
+  Gamma_a Pi_+ and K_a = -sqrt 2 I Gamma_a Pi_-. The rejected alternative e_a n is also a Clifford algebra, but its
+  current is indefinite.
+* **The map from LDG's spinor**: Z = psi REFERENCE (REFERENCE: Gamma_0 Z = Z, e_y e_x Z = I Z, unit norm) is a real
+  isomorphism (rank 8). It carries gamma_mu psi gamma_0 -> Gamma_mu Z, psi I sigma_3 -> I Z, <psi ~psi> -> h(Z, Z),
+  psi gamma_0 ~psi -> h(Z, Gamma_a Z), psi gamma_3 ~psi -> -h(Z, Gamma_a N Z), and <gamma^a phi I gamma_3 ~psi> ->
+  Re h(Z_psi, I Gamma^a Z_phi), to 1e-12.
+* **Normalization.** S1 = -2 sqrt(g) R + 12 sqrt(g) tr(f e^-1), S2 = -2 sqrt(g) ((tr F)^2 - F^a_b F^b_a) with
+  F = f e^-1, S3 = -24 sqrt(g) (1e-10 to 1e-12). LDG's closed rotation gauge field (4.49, 4.53) is the repo's
+  Levi-Civita connection on Painleve-Gullstrand, Kerr-Schild Kerr, the static lapse and de Sitter (1e-14). Their R has
+  the repo's sign (de Sitter R = -4 Lambda), so their 1/2 R is -S1/4 and their action det(h)^-1 (1/2 R - kappa L_D) is
+  S1 + 4 kappa |det e| L_D up to the factor -4.
+* **Dirac density** `dirac.density`: |det e| (Re h(Z, I Gamma^a D_a Z) - m h(Z, Z)). The coframe comes from DX with
+  its compensator components removed, and D is the full twistor transport ("full", the target) or its Lorentz sector
+  ("lorentz", LDG's coupling, the reference). With the Lorentz coupling it equals the oracle's (3.56) to 1e-13 on PG and
+  Kerr, with and without torsion and mass. Both are invariant under local Lorentz transformations (1e-11). Flat space:
+  the spinor equation is Dirac's, and plane waves solve it (1e-12).
+* **What the full transport adds** (action level, exact): the P sector adds sqrt 2 sigma for any coframe; the K
+  sector adds (sqrt 2/4)(tr F sigma + F^ab T_ab), T_ab the tensor bilinear bar(psi) sigma_ab (1 - gamma_5) psi; D adds
+  nothing. For f = k e the full transport is the Lorentz coupling with m -> m - sqrt 2 (1 + k), for the density and
+  the spinor equation, with a dilation field with curl (1e-10).
+* **Dirac equation** (`test_dirac_equation.py`). With the Lorentz coupling the CSTA spinor equation is the oracle's
+  blade by blade (1e-13), on PG and Kerr with and without torsion, and the oracle's Euler-Lagrange derivative is
+  2 |det e| <b_A gamma_0 ~R>, R the residual of LDG's (3.62) (1e-12). Closed form (`spinor_equation`):
+  I Gamma^a D_a Z + 1/2 I Gamma(tau) Z = m Z, delta S / delta c_k = 2 |det e| Re h(U_k, W) (1e-12), with
+  tau_b = -T^a_{ab} and T(a, b) = -n_o _| F_P(a, b) of the Lorentz and translation parts of Omega (`torsion_trace`,
+  equal to LDG's 3.65 to 1e-13). Including the dilation part would put b ^ e into F_P; the Dirac field does not see b.
+  Torsion-free: tau = 0 for any b, and the equation is minimally coupled. The full transport adds the h-Hermitian part
+  of the other sectors' operator, exact for general f, b with curl and torsion.
+* **Sources** (`test_dirac_sources.py`, Kerr with torsion, general f, b with curl). Lorentz rows: |det e| S . g^mu,
+  with S = 1/2 psi I gamma_3 ~psi and g^mu = h_bar(e^mu), LDG's spin tensor S . h_bar(a) (4.27, 4.37), the same under
+  either transport. Translation rows: the oracle's d(det(h)^-1 L)/d e (4.16, 4.20), and in closed form
+  -|det e| E^mu_b T^b_a with T(a) = <a.D psi I gamma_3 ~psi>_1 - a L; under the full transport D omits the P sector
+  (its action on Z does not depend on e; leaving it in misses by 4). Special-conformal rows: zero for the Lorentz
+  coupling, |det e| E^mu_b C^b_a for the full transport. Dilation rows: zero. All to 1e-12.
+* **Spin-torsion** (`test_spin_torsion.py`, kappa = 0.3). Levi-Civita plus LDG's contorsion Omega(d_mu) +=
+  1/2 kappa g_mu . S (4.41, 4.53) solves the Lorentz rows of S1 + beta S2 + gamma S3 + 4 kappa |det e| L_D on PG and
+  Kerr under either transport (1e-12); the opposite sign misses by more than 1. The torsion is
+  kappa (a ^ b) . S on the frame (1e-12), traceless, and the spinor equation is then minimally coupled (LDG's
+  consistency loop, 4.32-4.35). This is the first check here that distinguishes GTG from general relativity.
+* **Beyond GTG: the special-conformal field with Dirac matter** (full transport). The K equation
+  12 delta - 4 beta tr F delta + 4 beta F^T + 4 kappa C = 0 is solved by
+  F^b_a = (1/beta)(1 + kappa tr C / 3) delta^b_a - (kappa/beta) C^b_a, tr C = sqrt 2 sigma (K rows 1e-12 at it). The
+  Dirac field shifts f away from e/beta by its scalar density and its tensor bilinear.
+* **Consistency loop with alpha <F ^ F ^ X ^ I>** (`test_consistency_loop.py`). Its R ^ R part is the Euler density,
+  so the Lorentz equation gains alpha eps (T ^ f - e ^ D f). Lorentz coupling (f proportional to e): a rescaled LDG
+  contorsion solves the Lorentz rows for alpha = 0.01, 0.1 (1e-11), traceless: the loop holds for any alpha. Full
+  transport, with the Dirac-shifted f (exact to first order in alpha): solving the 24 Lorentz rows for a constant
+  contorsion at x on Kerr gives tau = 6e-16 at alpha = 0 and tau / alpha = (-0.003, 0.287, 0.046, 0.215) at
+  alpha = 1e-3, unchanged to 3% at 1e-2 (slow). So with Dirac matter and the full transport the minimally coupled
+  Dirac equation requires alpha = 0: the Dirac field fixes the Weyl-squared admixture of section 11.4.
+
 ## Not done / not established (be careful when citing)
 
 * **Einstein recovery with fixed compensators.** Einstein's equations with Lambda follow in second-order form (the
   compensator action) and in first-order form (the full connection varied, sections above), but with the compensators
-  fixed (the scale, or X = n_o and I = n_inf); their own dynamics and matter couplings were not attempted. A Weyl^2
-  admixture keeps the Einstein solutions and adds a massive spin-2 ghost. Open: whether the proposal takes alpha = 0;
+  fixed (the scale, or X = n_o and I = n_inf); their own dynamics were not attempted. A Weyl^2 admixture keeps the
+  Einstein solutions and adds a massive spin-2 ghost. With Dirac matter and the full twistor transport the consistency
+  loop requires alpha = 0 (section above, to first order in alpha); with the Lorentz coupling it does not decide. Open:
   the scalar and vector sectors of the linearization and the first-order action's linearization; whether every
   Cotton-free solution of the quadratic action's coframe equation is Bach-flat; the meaning of beta.
 * **Displacement gauge field of GTG.** For Kerr-Schild Kerr (and so Schwarzschild at a = 0) the CSTA's translation and
   Lorentz sectors were checked to hold exactly GTG's position gauge field and rotation gauge field, against an
   independent GTG implementation (numga's Kerr example; section "Kerr in the CSTA"). GTG's gauge freedom in h was
-  then checked for Schwarzschild between the PG and Kerr-Schild gauges (section above). Not checked: Doran's spinning
-  PG gauge of Kerr, and GTG's field equations themselves.
-* **Dilation gauge field b** is zero in Tier B. The only nonzero b examined is the pure gauge b = d lambda of a Weyl
-  rescaling (section above); a b with nonzero curl and any dynamics or gauge fixing were not explored (spec 11.3).
+  then checked for Schwarzschild between the PG and Kerr-Schild gauges (section above). GTG's field equations with
+  Dirac matter were checked pointwise against an LDG oracle (section "GTG with Dirac matter"). Not checked: Doran's
+  spinning PG gauge of Kerr; a self-gravitating Dirac solution; the effective four-fermion terms left after
+  eliminating the Dirac-shifted f; the conformal weight of the Dirac field; electromagnetic coupling.
+* **Dilation gauge field b** is zero in Tier B. Nonzero b examined: the pure gauge b = d lambda of a Weyl rescaling,
+  and a b with curl, which drops out of the first-order action and of the Dirac action. Its dynamics and gauge fixing
+  were not explored (spec 11.3).
 * **Fields are callables on points.** Identities are checked pointwise; 4D lattices appear only for export (`hypersurface.Grid4`), sampled from the callables.
 * **Fundamental versor fields (spec 11.1)** not explored beyond pure-gauge flatness.
-* The Lorentz-sector equivalence (spec 9.1) is kinematic: it verifies that F in the sector is the Riemann bivector map; no GTG dynamical equations were involved.
+* The Lorentz-sector equivalence (spec 9.1) is kinematic: it verifies that F in the sector is the Riemann bivector map. GTG's dynamical equations enter only in the Dirac-matter section.
 
 ## Findings about the spec
 
