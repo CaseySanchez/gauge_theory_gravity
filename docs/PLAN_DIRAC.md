@@ -162,3 +162,5 @@ RESULTS.md (claims, tests, tolerances), DEEP_DIVE §11, the LaTeX formulation (a
     for a constant contorsion at x on Kerr. τ = 6e-16 at α = 0, and τ/α = (−0.003, 0.287, 0.046, 0.215) at α = 1e-3,
     unchanged to 3% at 1e-2 and bending at 0.1. So the minimally coupled Dirac equation fails unless α = 0: in the
     full CSTA, Dirac matter fixes the Weyl-squared admixture to zero.
+- Phase 7: done (RESULTS.md, DEEP_DIVE §5.9, §10, §11, README, the LaTeX formulation §13 with the PDF rebuilt).
+  Next: a self-gravitating solution, docs/PLAN_DIRAC_SOLUTION.md.
