@@ -105,6 +105,32 @@ def rotation_gauge(coframe, x4) -> list:
     return [omega(e[:, mu]) for mu in range(4)]                        # Omega_mu = omega(g_mu)
 
 
+def rotation_kernels(coframe):
+    """x4 -> [4, 15]: the kernels of Omega_mu from the same closed solution as `rotation_gauge` (4.49, 4.53), traceable
+    by jax, for geometries without a hand-written rotation field."""
+    def kernels(x4):
+        e = coframe(x4)
+        Hb = _h_bar_jnp(e)
+        d_inverse = jax.jacfwd(lambda y: jnp.linalg.inv(_h_bar_jnp(coframe(y))))(x4)       # [i, j, mu]
+        h_bar_e_up = [vector(Hb[:, mu] * ETA[mu]) for mu in range(4)]                  # h_bar(e^mu)
+
+        def H(a_components):
+            total = 0 * (GAMMA[0] ^ GAMMA[1])
+            for mu in range(4):
+                total = total + (h_bar_e_up[mu] ^ vector(Hb @ (d_inverse[:, :, mu] @ a_components)))
+            return total
+
+        basis = jnp.eye(4)
+        trivector = sum(((ETA[b] * GAMMA[b]) ^ H(basis[b]) for b in range(4)),
+                        0 * (GAMMA[0] ^ GAMMA[1] ^ GAMMA[2]))
+        rows = []
+        for mu in range(4):
+            value = -H(e[:, mu]) + 0.5 * (vector(e[:, mu]) * trivector).restrict_grade(2)
+            rows.append(value.cast(al.Bivector).kernel)
+        return jnp.stack(rows)
+    return kernels
+
+
 def _h_bar_jnp(e):
     E = jnp.linalg.inv(e)
     g_up = E * jnp.asarray(ETA)[None, :]
@@ -231,7 +257,8 @@ def coframe_derivative(coframe, rotation_kernels, spinor, x4, mass: float = 0.0)
 # --- the full action and its field equations (LDG 4.14, 4.16, 4.22, 3.57) ------------------------------------------
 def action_density(e, Om_k, dOm_k, psi_k, dpsi_k, mass, kappa, cosmological):
     """det(h)^-1 (1/2 R - kappa L_D + Lambda) as a local function: e[a, mu], Omega_mu [4, 15], d_nu Omega_mu
-    [4, 15, nu], psi [32], d_mu psi [32, mu]. R = <(g^nu ^ g^mu) R_mu nu> with R_mu nu from (4.2).
+    [4, 15, nu], psi [32] or [n, 32] for n fermions (their Dirac densities summed), d_mu psi [32, mu] or [n, 32, mu].
+    R = <(g^nu ^ g^mu) R_mu nu> with R_mu nu from (4.2).
 
     The sign of Lambda: with this R (de Sitter has R = -4 Lambda, `test_gtg_dirac_reference`) a positive, repulsive
     Lambda (de Sitter with 3 H^2 = Lambda) enters as + Lambda det(h)^-1. LDG print the term as - Lambda det(h)^-1 (4.36);
@@ -244,12 +271,14 @@ def action_density(e, Om_k, dOm_k, psi_k, dpsi_k, mass, kappa, cosmological):
         for nu in range(4):
             R = mv.bivector(dOm_k[nu, :, mu] - dOm_k[mu, :, nu]) + commutator(Om[mu], Om[nu])
             curvature = curvature + ((g_up[nu] ^ g_up[mu]) * R).restrict_grade(0).kernel.reshape(())
-    psi = even(psi_k)
-    kinetic = 0.0
-    for mu in range(4):
-        covariant = even(dpsi_k[:, mu]) + 0.5 * (Om[mu] * psi)
-        kinetic = kinetic + (g_up[mu] * covariant * I_STA * GAMMA[3] * ~psi).restrict_grade(0).kernel.reshape(())
-    dirac = kinetic - mass * (psi * ~psi).restrict_grade(0).kernel.reshape(())
+    dirac = 0.0
+    for psi_n, dpsi_n in zip(psi_k.reshape(-1, 32), dpsi_k.reshape(-1, 32, 4)):    # one or several fermions, summed
+        psi = even(psi_n)
+        kinetic = 0.0
+        for mu in range(4):
+            covariant = even(dpsi_n[:, mu]) + 0.5 * (Om[mu] * psi)
+            kinetic = kinetic + (g_up[mu] * covariant * I_STA * GAMMA[3] * ~psi).restrict_grade(0).kernel.reshape(())
+        dirac = dirac + kinetic - mass * (psi * ~psi).restrict_grade(0).kernel.reshape(())
     return jnp.abs(jnp.linalg.det(e)) * (0.5 * curvature - kappa * dirac + cosmological)
 
 
@@ -274,5 +303,5 @@ def field_equations(coframe, rotation_kernels, spinor, x4, mass, kappa, cosmolog
 
     d_momenta = jax.jacfwd(momenta)(x4)
     connection = direct[1] - jnp.einsum("kbnn->kb", d_momenta[0])
-    spinor_rows = direct[2] - jnp.einsum("ann->a", d_momenta[1])
+    spinor_rows = direct[2] - jnp.trace(d_momenta[1], axis1=-2, axis2=-1)          # [32] or [n, 32]
     return np.asarray(spinor_rows), np.asarray(direct[0]), np.asarray(connection)

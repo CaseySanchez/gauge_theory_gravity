@@ -128,4 +128,22 @@ README: the soliton under both couplings, and what the full transport's gradient
 
 ## Status
 
-Not started.
+- Phase 0: done (`tests/fsy_solution.py`; `gtg_dirac_reference.rotation_kernels`, and `action_density` and
+  `field_equations` for several fermions; `tests/test_fsy_solution.py`, 10 tests, about 2 minutes).
+  - **The paper.** FSY's (5.4)–(5.7) are the ODEs recalled above. It prints no tables, only figures. Its section 4
+    states the key fact directly: for the singlet, `Σ_a Ψ̄_a γ⁵ G^p Ψ_a = 0`.
+  - **Shooting.** With T₀ = 1 and m = 1 (FSY section 6), the ground states are at ω₀ = 1.0711161774331 for α₁ = 0.02
+    and ω₀ = 1.5134807004016 for α₁ = 0.1. Both have no node, decay and have T decreasing. After FSY's scaling:
+    - α₁ = 0.02: m̃ = 0.534, ω̃ = 0.502, ρ̃ − 2m̃ = −0.021;
+    - α₁ = 0.1: m̃ = 0.588, ω̃ = 0.459, ρ̃ − 2m̃ = −0.031.
+    So both are bound and gain energy, as in FSY's figures 7 and 10. α₁ = 0.1 is the strong-field case (A down to
+    0.61, T to 0.52). The first sign flip in ω is the ground state. Later flips are excited states, and flips with
+    ωτ > m are continuum artifacts.
+  - **The fit floor.** Chebyshev degree 90 on [0.4, 6] matches the ODEs to 4e-11.
+  - **The Dirac-representation map.** It is exact: γ_μ acts as `γ_μ ψ γ₀`, i as `·Iσ₃`, and Ψ̄Ψ is `⟨ψψ̃⟩`.
+  - **No torsion.** Each fermion's spin trivector is about 1.6e-3, and their sum is 2e-19. The parity argument holds.
+  - **The rotation field.** The traceable rotation field equals LDG's closed form (4.49, 4.53) to 1e-17.
+  - **LDG's equations.** With κ = 8π, Levi-Civita and no contorsion, the spinor, h and Ω equations of the two-fermion
+    action vanish at three events (r = 0.84, 1.7, 2.6): spinor 1e-12, h 1.2e-11 (the fit floor), Ω 1e-16. So FSY's
+    torsion-free solution is a GTG solution as it stands, and their conventions and normalization match LDG's.
+    κ = 4π, m = 1.05, or one fermion alone fail by 0.05 to 0.5.
