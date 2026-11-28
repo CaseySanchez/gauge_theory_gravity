@@ -116,3 +116,27 @@ transport changes in it.
   - So both normalizations hold against an independent self-consistent solution: the `4κ` coupling, and
     `Λ = 6(γ − 1/β)` with Λ repulsive.
   - Region (iii) and the extremal case are still not transcribed (Phase 0), so they are not checked here.
+- Phase 2: done (`Cosmology(coupling=beta)`, `shifted_special` in `tests/cldg_solution.py`;
+  `tests/test_cldg_full_transport.py`, 5 tests; the reduced-equation test covers the full-transport closed forms).
+  - **Homogeneity holds.** For this spinor `C/ρ` is constant: `(√2/4)σ` on the diagonal plus a tensor part in the
+    γ₀γ₃ plane, not γ₁γ₂. χ rotates γ₁γ₂, so it leaves C alone. With the boost, part of C rotates with χ but stays a
+    function of t alone. σ = ±ρ and the pseudoscalar density vanishes.
+  - **Spinor equation.** At the shifted f the full transport adds a real multiple of Z: the compensator mass
+    `√2(1 + tr F/4)` and the tensor coupling `−F₀₃/√2`. Together the mass is `m − √2(1 + 1/β) + κσ/(12β)`, for both
+    branches.
+  - **Reduction.** On a local Taylor ansatz (H, ρ, χ and their first derivatives at t₀, with f shifted exactly), only
+    the P_t row along `E^μ₀` survives: the Friedmann constraint. LDG's contorsion still solves the Lorentz rows, the
+    shifted f solves the K rows, and the D rows vanish. The residual equals
+    `4(3H² − Λ − 12π²aρ² − 8πm₀ρ cos β)` at 10 shifted (H, ρ) states for both branches (1e-14), with
+    `a = 1 + 2/(9β)` and `m₀ = m − √2(1 + 1/β)`.
+  - **Why.** Eliminating f from `12 tr F − 2β((tr F)² − F:F) + 4κ C·F` leaves 24/β (inside `Λ = 6(γ − 1/β)`),
+    `4κ√2σ/β` (inside the mass) and the contact term `(κ/2β)((tr C)²/3 − C:C) = −κσ²/(24β)`. As a potential
+    `V = m₀σ + κσ²/(24β)`, its energy `V` gives the constraint and `V'` gives the mass.
+  - **Closed form.** The constraint stays quadratic in `y = 1/(6πρ)`: `ẏ² = a + 4m₀ cos β y + 3Λy²`. So the thesis's
+    formulas carry over with m₀ and `√a α` in place of m and α, and `χ = ±m₀t − (√a/2) ln(√a α coth αt ± m₀)`. All 60
+    connection rows and 8 spinor rows vanish (1e-12): particle β = 4, antiparticle β = 2, boosted particle β = −1. The
+    Lorentz-coupled solution fails the full-transport P and spinor rows.
+  - **The scale question.** The rows see only m₀, so the compensator mass is absorbed into the bare m, and a physical
+    mass does not force β ≈ −1. What β does fix is a, the strength of the effective spin–torsion term: a = 7/9 at
+    β = −1, and the term cancels at β = −2/9. A real `√a` needs β > 0 or β < −2/9. For a ≤ 0 the closed form changes
+    (not covered).

@@ -23,14 +23,17 @@ PARTICLE, ANTIPARTICLE = Cosmology(sign=1), Cosmology(sign=-1)
 BOOSTED = Cosmology(sign=1, xi=0.4, eta=0.7)
 
 
-@pytest.mark.parametrize("solution", [PARTICLE, ANTIPARTICLE])
+@pytest.mark.parametrize("solution", [PARTICLE, ANTIPARTICLE, Cosmology(sign=1, coupling=4.0),
+                                      Cosmology(sign=-1, coupling=2.0), Cosmology(sign=1, coupling=-1.0)])
 @pytest.mark.parametrize("t", [0.2, 0.4])
 def test_closed_forms_solve_the_reduced_equations(solution, t):
+    """The thesis's equations, with m0 and a for the full transport (a = 1, m0 = m without it)."""
     rho, H = float(solution.density(t)), float(solution.hubble(t))
+    m, a, s = solution.effective_mass, solution.contact, solution.sign
     assert rho > 0
     assert abs(float(jax.grad(solution.density)(t)) + 3 * rho * H) < 1e-12 * max(1.0, rho * H)
-    assert abs(float(jax.grad(solution.phase)(t)) - (solution.sign * solution.mass + 3 * np.pi * rho)) < 1e-12
-    constraint = 3 * H ** 2 - 12 * np.pi ** 2 * rho ** 2 - 8 * np.pi * solution.mass * rho * solution.sign
+    assert abs(float(jax.grad(solution.phase)(t)) - (s * m + 3 * np.pi * a * rho)) < 1e-12
+    constraint = 3 * H ** 2 - 12 * np.pi ** 2 * a * rho ** 2 - 8 * np.pi * m * rho * s
     assert abs(constraint - solution.cosmological) < 1e-12 * max(1.0, 3 * H ** 2)
 
 

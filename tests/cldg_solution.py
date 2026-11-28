@@ -17,6 +17,17 @@ with alpha = sqrt(3 Lambda) / 2 and s, c = sinh, cosh (alpha t):
     H   = alpha (alpha cosh 2 alpha t +- m sinh 2 alpha t) / (3 s (alpha c +- m s)),
     chi = +- m t - 1/2 ln(alpha coth(alpha t) +- m)      (derived here: chi' = +- m + 3 pi rho).
 
+Under the CSTA's full twistor transport (`coupling` = beta, docs/PLAN_DIRAC_SOLUTION.md Phase 2) the same form solves
+the equations with m replaced by the bare-shifted m0 = m - sqrt 2 (1 + 1/beta) and the spin-torsion term scaled by
+a = 1 + 2/(9 beta), from the contact term the special-conformal field leaves when it is eliminated:
+
+    3 H^2 - 12 pi^2 a rho^2 - 8 pi m0 rho cos beta - Lambda = 0,    chi' = m0 cos beta + 3 pi a rho,
+    rho = alpha^2 / (6 pi s (sqrt a alpha c +- m0 s)),
+    H   = alpha (sqrt a alpha cosh 2 alpha t +- m0 sinh 2 alpha t) / (3 s (sqrt a alpha c +- m0 s)),
+    chi = +- m0 t - sqrt a / 2 ln(sqrt a alpha coth(alpha t) +- m0),
+
+with f the Dirac-shifted special-conformal field (`shifted_special`). Without `coupling`, a = 1 and m0 = m.
+
 Everything is a jax-traceable function of the coordinates x4 = (t, x, y, z), for the oracle's autodiff. The same
 fields in the CSTA (`geometry`, `csta_spinor`, `csta_connection`): the coframe e^0 = dt, e^i = dx^i - H x^i dt as the
 identity plus a dyad, Z = dirac.from_sta(psi), and Levi-Civita plus f plus LDG's contorsion.
@@ -48,28 +59,39 @@ class Cosmology:
     sign: int = 1                      # cos beta: +1 particle, -1 antiparticle
     xi: float = 0.0                    # the constant boost L
     eta: float = 0.0
+    coupling: float | None = None      # beta of the CSTA under the full transport; None for GTG's Lorentz coupling
 
     @property
     def alpha(self):
         return np.sqrt(3 * self.cosmological) / 2
+
+    @property
+    def effective_mass(self):
+        """m0: m less the compensator mass sqrt 2 (1 + 1/beta) under the full transport."""
+        return self.mass if self.coupling is None else self.mass - np.sqrt(2) * (1 + 1 / self.coupling)
+
+    @property
+    def contact(self):
+        """a: the factor on the spin-torsion term 12 pi^2 rho^2, 1 + 2/(9 beta) under the full transport."""
+        return 1.0 if self.coupling is None else 1 + 2 / (9 * self.coupling)
 
     def _sc(self, t):
         a = self.alpha
         return jnp.sinh(a * t), jnp.cosh(a * t)
 
     def density(self, t):
-        a, m, s = self.alpha, self.mass, self.sign
+        a, m, s, r = self.alpha, self.effective_mass, self.sign, np.sqrt(self.contact)
         sh, ch = self._sc(t)
-        return a ** 2 / (6 * np.pi * sh * (a * ch + s * m * sh))
+        return a ** 2 / (6 * np.pi * sh * (r * a * ch + s * m * sh))
 
     def hubble(self, t):
-        a, m, s = self.alpha, self.mass, self.sign
+        a, m, s, r = self.alpha, self.effective_mass, self.sign, np.sqrt(self.contact)
         sh, ch = self._sc(t)
-        return a * (a * jnp.cosh(2 * a * t) + s * m * jnp.sinh(2 * a * t)) / (3 * sh * (a * ch + s * m * sh))
+        return a * (r * a * jnp.cosh(2 * a * t) + s * m * jnp.sinh(2 * a * t)) / (3 * sh * (r * a * ch + s * m * sh))
 
     def phase(self, t):
-        a, m, s = self.alpha, self.mass, self.sign
-        return s * m * t - 0.5 * jnp.log(a / jnp.tanh(a * t) + s * m)
+        a, m, s, r = self.alpha, self.effective_mass, self.sign, np.sqrt(self.contact)
+        return s * m * t - 0.5 * r * jnp.log(r * a / jnp.tanh(a * t) + s * m)
 
     # --- fields of x4 ---------------------------------------------------------------------------------------------
     def coframe(self, x4):
@@ -143,3 +165,20 @@ class Cosmology:
             return connection + sum(((0.5 * KAPPA * torsion * (legs[mu] * spin).restrict_grade(2)).cast(al.Bivector)
                                      * (al.SLICES[mu] & al.Direction) for mu in range(4)), 0 * connection)
         return omega
+
+    def shifted_special(self, beta):
+        """The special-conformal field that solves the K rows under the full transport (`test_spin_torsion`):
+        F^b_a = (1/beta)(1 + kappa tr C / 3) delta^b_a - (kappa/beta) C^b_a, f = F e, with C from the spinor."""
+        geometry = self.geometry()
+
+        def special(position):
+            current = dr.special_conformal_current(self.csta_spinor(position))              # [a, b] = C^b_a
+            trace = current[0, 0] + current[1, 1] + current[2, 2] + current[3, 3]
+            coframe = geometry(position)
+            total = 0 * coframe
+            for a in range(4):
+                for b in range(4):
+                    weight = (1 + KAPPA * trace / 3) / beta * float(a == b) - KAPPA / beta * current[b, a]
+                    total = total + weight * (al.DIRECTIONS[a] * (al.SLICES[b] & coframe))
+            return total
+        return special
