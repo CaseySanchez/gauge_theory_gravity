@@ -153,3 +153,12 @@ RESULTS.md (claims, tests, tolerances), DEEP_DIVE §11, the LaTeX formulation (a
     equation `12δ − 4β tr F δ + 4β Fᵀ + 4κC = 0` is solved exactly by
     `F^b_a = (1/β)(1 + κ tr C/3)δ^b_a − (κ/β)C^b_a`, with `tr C = √2σ`. So the Dirac field shifts f away from e/β by
     ψ̄ψ and by the tensor bilinear, and through f it shifts the compensator mass, giving a `(ψ̄ψ)²` contact term.
+- Phase 6: done (`tests/test_consistency_loop.py`, 2 tests plus 1 slow). `⟨F∧F∧X∧𝓘⟩` sees only `F_M = R + (e∧f)`.
+  Its `R∧R` part is the Euler density, so the Lorentz equation gains `α ε(T∧f − e∧Df)`.
+  - Lorentz coupling: f ∝ e, so the term only rescales S₁'s. A rescaled LDG contorsion solves the Lorentz rows for
+    α = 0.01 and 0.1 (1e-11), and the torsion stays traceless: the loop holds for every α. LDG's "only R" claim does
+    not carry over to this action with their coupling.
+  - Full transport: with the Dirac-shifted f of Phase 5 (exact to first order in α), the 24 Lorentz rows are solved
+    for a constant contorsion at x on Kerr. τ = 6e-16 at α = 0, and τ/α = (−0.003, 0.287, 0.046, 0.215) at α = 1e-3,
+    unchanged to 3% at 1e-2 and bending at 0.1. So the minimally coupled Dirac equation fails unless α = 0: in the
+    full CSTA, Dirac matter fixes the Weyl-squared admixture to zero.
