@@ -47,15 +47,26 @@ PAULI = [np.array([[0, 1], [1, 0]], complex), np.array([[0, -1j], [1j, 0]]), np.
 
 
 # --- FSY's ODEs (5.4)-(5.7) and the shooting ----------------------------------------------------------------------
-def rhs(r, y, omega, mass):
+def rhs(r, y, omega, mass, coupling=None):
+    """FSY (5.4)-(5.7); with `coupling` = beta, the CSTA's full transport (PLAN_DIRAC_SOLITON.md Phase 2): the mass
+    m0 = m - sqrt 2 (1 + 1/beta) - kappa T (alpha^2 - beta^2) / (3 beta r^2), the radial term 1/r + delta with
+    delta = -kappa T alpha beta / (beta r^2), and the contact density
+    L_c = kappa sigma^2 / (12 beta) + kappa K^2 / (8 beta), sigma = 2 T (alpha^2 - beta^2) / r^2, K = 4 T alpha beta / r^2,
+    in the Einstein equations."""
     alpha, beta, A, T = y
     root = np.sqrt(max(A, 1e-300))
     density = alpha ** 2 + beta ** 2
-    return [(alpha / r - (omega * T + mass) * beta) / root,
-            ((omega * T - mass) * alpha - beta / r) / root,
-            (1 - A - 16 * np.pi * omega * T ** 2 * density) / r,
-            T * (A - 1 - 16 * np.pi * omega * T ** 2 * density + 32 * np.pi * T * alpha * beta / r
-                 + 16 * np.pi * mass * T * (alpha ** 2 - beta ** 2)) / (2 * r * A)]
+    m, radial, contact = mass, 1 / r, 0.0
+    if coupling is not None:
+        sigma, K = 2 * T * (alpha ** 2 - beta ** 2) / r ** 2, 4 * T * alpha * beta / r ** 2
+        m = mass - np.sqrt(2) * (1 + 1 / coupling) - KAPPA * sigma / (6 * coupling)
+        radial = 1 / r - KAPPA * K / (4 * coupling)
+        contact = KAPPA * sigma ** 2 / (12 * coupling) + KAPPA * K ** 2 / (8 * coupling)
+    return [(radial * alpha - (omega * T + m) * beta) / root,
+            ((omega * T - m) * alpha - radial * beta) / root,
+            (1 - A - 16 * np.pi * omega * T ** 2 * density - 8 * np.pi * r ** 2 * contact) / r,
+            T * (A - 1 - 16 * np.pi * omega * T ** 2 * density + 32 * np.pi * T * radial * alpha * beta
+                 + 16 * np.pi * m * T * (alpha ** 2 - beta ** 2) + 8 * np.pi * r ** 2 * contact) / (2 * r * A)]
 
 
 def regular_start(r, alpha1, omega, mass, T0=1.0):
@@ -65,21 +76,21 @@ def regular_start(r, alpha1, omega, mass, T0=1.0):
             T0 + 4 * np.pi / 3 * alpha1 ** 2 * T0 ** 2 * (mass - 2 * omega * T0) * r ** 2]
 
 
-def _diverges(r, y, omega, mass):
+def _diverges(r, y, omega, mass, coupling=None):
     return min(5.0 - abs(y[0]) - abs(y[1]), y[2] - 1e-3)
 
 
 _diverges.terminal = True
 
 
-def integrate(alpha1, omega, mass=1.0, outer=3000.0, inner=1e-5):
-    return solve_ivp(rhs, (inner, outer), regular_start(inner, alpha1, omega, mass), args=(omega, mass),
+def integrate(alpha1, omega, mass=1.0, outer=3000.0, inner=1e-5, coupling=None):
+    return solve_ivp(rhs, (inner, outer), regular_start(inner, alpha1, omega, mass), args=(omega, mass, coupling),
                      method="DOP853", rtol=1e-13, atol=1e-15, events=_diverges, dense_output=True)
 
 
-def shoot(alpha1, low, high, mass=1.0, steps=55):
+def shoot(alpha1, low, high, mass=1.0, steps=55, coupling=None):
     """The omega between low and high at which the sign of the diverging spinor flips: a bound state."""
-    side = lambda omega: np.sign(integrate(alpha1, omega, mass).y[0, -1])                      # noqa: E731
+    side = lambda omega: np.sign(integrate(alpha1, omega, mass, coupling=coupling).y[0, -1])  # noqa: E731
     s_low = side(low)
     assert side(high) != s_low
     for _ in range(steps):
@@ -126,14 +137,23 @@ class Soliton:
     inner: float = 0.4
     outer: float = 6.0
     degree: int = 90
+    coupling: float | None = None      # beta of the CSTA under the full transport; None for GTG's Lorentz coupling
+    given_omega: float | None = None   # use this omega instead of shooting: a local solution, not a bound state
 
     @cached_property
     def omega(self):
-        return shoot(self.alpha1, self.low, self.high, self.mass)
+        if self.given_omega is not None:
+            return self.given_omega
+        return shoot(self.alpha1, self.low, self.high, self.mass, coupling=self.coupling)
+
+    @cached_property
+    def effective_mass(self):
+        """m0 = m - sqrt 2 (1 + 1/beta) under the full transport, the mass of the oracle's effective action."""
+        return self.mass if self.coupling is None else self.mass - np.sqrt(2) * (1 + 1 / self.coupling)
 
     @cached_property
     def solution(self):
-        return integrate(self.alpha1, self.omega, self.mass)
+        return integrate(self.alpha1, self.omega, self.mass, coupling=self.coupling)
 
     @cached_property
     def coefficients(self):
@@ -155,7 +175,8 @@ class Soliton:
         values = np.stack([chebyshev.chebval(u, c) for c in self.coefficients])
         slopes = np.stack([chebyshev.chebval(u, chebyshev.chebder(c)) * 2 / (self.outer - self.inner)
                            for c in self.coefficients])
-        exact = np.stack([rhs(ri, values[:, i], self.omega, self.mass) for i, ri in enumerate(r)], axis=1)
+        exact = np.stack([rhs(ri, values[:, i], self.omega, self.mass, self.coupling) for i, ri in enumerate(r)],
+                         axis=1)
         return float(np.abs(slopes - exact).max())
 
     # --- fields of x4 ---------------------------------------------------------------------------------------------
@@ -218,3 +239,20 @@ class Soliton:
     def csta_connection(self, special):
         """Levi-Civita, the coframe and the special-conformal field: the singlet's spin vanishes, so no contorsion."""
         return cf.connection(self.geometry(), special)
+
+    def shifted_special(self, beta):
+        """The special-conformal field that solves the K rows under the full transport, from the singlet's total
+        current C = C_1 + C_2: F^b_a = (1/beta)(1 + kappa tr C / 3) delta^b_a - (kappa/beta) C^b_a, f = F e."""
+        geometry = self.geometry()
+
+        def special(position):
+            current = sum(dr.special_conformal_current(self.csta_spinor(k)(position)) for k in range(2))  # [a, b] = C^b_a
+            trace = current[0, 0] + current[1, 1] + current[2, 2] + current[3, 3]
+            coframe = geometry(position)
+            total = 0 * coframe
+            for a in range(4):
+                for b in range(4):
+                    weight = (1 + KAPPA * trace / 3) / beta * float(a == b) - KAPPA / beta * current[b, a]
+                    total = total + weight * (al.DIRECTIONS[a] * (al.SLICES[b] & coframe))
+            return total
+        return special

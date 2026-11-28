@@ -255,10 +255,15 @@ def coframe_derivative(coframe, rotation_kernels, spinor, x4, mass: float = 0.0)
 
 
 # --- the full action and its field equations (LDG 4.14, 4.16, 4.22, 3.57) ------------------------------------------
-def action_density(e, Om_k, dOm_k, psi_k, dpsi_k, mass, kappa, cosmological):
+def action_density(e, Om_k, dOm_k, psi_k, dpsi_k, mass, kappa, cosmological, contact=0.0):
     """det(h)^-1 (1/2 R - kappa L_D + Lambda) as a local function: e[a, mu], Omega_mu [4, 15], d_nu Omega_mu
     [4, 15, nu], psi [32] or [n, 32] for n fermions (their Dirac densities summed), d_mu psi [32, mu] or [n, 32, mu].
     R = <(g^nu ^ g^mu) R_mu nu> with R_mu nu from (4.2).
+
+    `contact` = c adds the four-fermion term the CSTA's full transport leaves when the special-conformal field is
+    eliminated (docs/PLAN_DIRAC_SOLUTION.md Phase 2, PLAN_DIRAC_SOLITON.md Phase 2), - kappa c (sigma^2/6 + K_ab K^ab/8),
+    with sigma = sum <psi ~psi> and K_ab = sum <(gamma_a ^ gamma_b) I psi I sigma_3 ~psi> over the fermions; the CSTA
+    has c = kappa / (2 beta).
 
     The sign of Lambda: with this R (de Sitter has R = -4 Lambda, `test_gtg_dirac_reference`) a positive, repulsive
     Lambda (de Sitter with 3 H^2 = Lambda) enters as + Lambda det(h)^-1. LDG print the term as - Lambda det(h)^-1 (4.36);
@@ -279,10 +284,21 @@ def action_density(e, Om_k, dOm_k, psi_k, dpsi_k, mass, kappa, cosmological):
             covariant = even(dpsi_n[:, mu]) + 0.5 * (Om[mu] * psi)
             kinetic = kinetic + (g_up[mu] * covariant * I_STA * GAMMA[3] * ~psi).restrict_grade(0).kernel.reshape(())
         dirac = dirac + kinetic - mass * (psi * ~psi).restrict_grade(0).kernel.reshape(())
+    if contact:
+        psis = [even(p) for p in psi_k.reshape(-1, 32)]
+        sigma = sum((p * ~p).restrict_grade(0).kernel.reshape(()) for p in psis)
+        spin = sum(((p * I_STA * GAMMA[3] * GAMMA[0] * ~p).restrict_grade(2) for p in psis), 0 * (GAMMA[0] ^ GAMMA[1]))
+        square = 0.0
+        for a in range(4):
+            for b in range(4):
+                if a != b:
+                    K = ((GAMMA[a] ^ GAMMA[b]) * I_STA * spin).restrict_grade(0).kernel.reshape(())
+                    square = square + ETA[a] * ETA[b] * K ** 2
+        dirac = dirac + contact * (sigma ** 2 / 6 + square / 8)
     return jnp.abs(jnp.linalg.det(e)) * (0.5 * curvature - kappa * dirac + cosmological)
 
 
-def field_equations(coframe, rotation_kernels, spinor, x4, mass, kappa, cosmological):
+def field_equations(coframe, rotation_kernels, spinor, x4, mass, kappa, cosmological, contact=0.0):
     """(spinor [32], coframe [4, 4], connection [4, 15]): the Euler-Lagrange derivatives of `action_density` in psi,
     e and Omega_mu at x4. h_bar and e are equivalent variables, so the coframe rows vanish exactly when LDG's
     h-equation G(a) - Lambda a = kappa T(a) holds."""
@@ -292,7 +308,7 @@ def field_equations(coframe, rotation_kernels, spinor, x4, mass, kappa, cosmolog
         return (coframe(y), rotation_kernels(y), jax.jacfwd(rotation_kernels)(y), spinor(y), jax.jacfwd(spinor)(y))
 
     def local(*values):
-        return action_density(*values, mass, kappa, cosmological)
+        return action_density(*values, mass, kappa, cosmological, contact)
 
     values = fields(x4)
     direct = jax.grad(local, argnums=(0, 1, 3))(*values)

@@ -162,3 +162,27 @@ README: the soliton under both couplings, and what the full transport's gradient
   - **Negative check.** One fermion at the singlet's total density fails the M rows (0.46 at r = 1.7, 0.14 at
     r = 2.6).
   - This is the first localized self-gravitating solution in the repo, with gradients in every direction.
+- Phase 2: done (`fsy_solution.rhs(coupling=β)`, `Soliton(coupling, given_omega)`, `shifted_special`;
+  `gtg_dirac_reference.action_density(contact=…)`; `tests/test_fsy_full_transport.py`, 4 tests plus 1 slow).
+  - **C in STA bilinears.** `C_ab = (√2/4)(σ η_ab + K_ab)`, with `K_ab = ⟨(γ_a∧γ_b) I S⟩` and `S = ψIσ₃ψ̃`: the dual of
+    the spin bivector (exact).
+  - **C on the singlet.** The total C has the trace `√2σ`, with `σ = 2T(α² − β²)/r²`, and a magnetic tensor part
+    orthogonal to r̂, `K = 4Tαβ/r²` (1e-15). The total spin still vanishes.
+  - **f is auxiliary.** It enters S₁ (`12√g tr F`), S₂ and the Dirac coupling algebraically, so `D f` never enters at
+    α = 0. Eliminating f gives GTG with `m₀ = m − √2(1 + 1/β)` and the contact term
+    `L_c = (κ/2β)(σ²/6 + K_abK^ab/8)`. The magnetic K fixes the invariant contraction, which the cosmology's electric K
+    could not.
+  - **Modified FSY equations.** On the singlet, the changes are:
+    - the mass `m₀ − κσ/(6β)`;
+    - the radial term `1/r − κK/(4β)`, like an anomalous radial moment;
+    - `∓8πr²L_c` in (5.6) and (5.7).
+    A local solution solves the oracle with the contact term (7e-11, 5e-10) and fails without it (0.3). It solves
+    every CSTA row under the full transport, with the bare m and f shifted by the total C: P 2e-9, the rest about
+    1e-15, the spinor rows 2e-12.
+  - **The soliton survives.** The equations scale like FSY's with m₀ in place of m (κ/β is unchanged by the scaling),
+    so we shoot with m₀ = 1. For β = 4, 1, −1, −0.5 and α₁ = 0.02–0.2, every case has a nodeless, bound ground state
+    (ω̃ < m̃₀) with `ρ̃ < 2m̃₀` at small coupling. The contact term moves the spectrum by 1–5%. β > 0 (attractive)
+    lowers the family's largest m̃₀ from 0.602 (FSY) to 0.598 (β = 4) and 0.588 (β = 1). β < 0 (repulsive) raises it to
+    0.616 (β = −1) and 0.630 (β = −0.5). At α₁ = 0.1, β = 4: ω₀ = 1.4976695441, against FSY's 1.5134807004.
+  - **The scale question.** As in the cosmology, the rows see only m₀. The bare mass `m₀ + √2(1 + 1/β)` is not
+    constrained, and β = −1 is not special beyond `m₀ = m`. β sets the contact strength ∝ 1/β.

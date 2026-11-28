@@ -55,7 +55,7 @@ def test_shooting_finds_fsy_ground_states(soliton):
     integrand = lambda r: (lambda z: (z[0] ** 2 + z[1] ** 2) * z[3] / np.sqrt(z[2]))(solution.sol(r))  # noqa: E731
     lam = np.sqrt(4 * np.pi * quad(integrand, 1e-5, R, limit=500)[0])                       # FSY section 6
     tau = T[cut]
-    mass, omega, adm = lam * soliton.mass, lam * soliton.omega * tau, R / 2 * (1 - A[cut]) / lam
+    mass, omega, adm = lam * soliton.effective_mass, lam * soliton.omega * tau, R / 2 * (1 - A[cut]) / lam
     assert omega < mass                                                                    # bound
     assert adm < 2 * mass                                                                  # energy gained (FSY fig. 10)
     assert soliton.fit_residual() < 1e-9
