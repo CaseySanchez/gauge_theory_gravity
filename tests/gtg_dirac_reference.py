@@ -226,3 +226,53 @@ def coframe_derivative(coframe, rotation_kernels, spinor, x4, mass: float = 0.0)
         return jnp.abs(jnp.linalg.det(e)) * (kinetic - mass * (P * ~P).restrict_grade(0).kernel.reshape(()))
 
     return np.asarray(jax.grad(local)(coframe(x4)))
+
+
+# --- the full action and its field equations (LDG 4.14, 4.16, 4.22, 3.57) ------------------------------------------
+def action_density(e, Om_k, dOm_k, psi_k, dpsi_k, mass, kappa, cosmological):
+    """det(h)^-1 (1/2 R - kappa L_D + Lambda) as a local function: e[a, mu], Omega_mu [4, 15], d_nu Omega_mu
+    [4, 15, nu], psi [32], d_mu psi [32, mu]. R = <(g^nu ^ g^mu) R_mu nu> with R_mu nu from (4.2).
+
+    The sign of Lambda: with this R (de Sitter has R = -4 Lambda, `test_gtg_dirac_reference`) a positive, repulsive
+    Lambda (de Sitter with 3 H^2 = Lambda) enters as + Lambda det(h)^-1. LDG print the term as - Lambda det(h)^-1 (4.36);
+    the self-consistent cosmology (`cldg_solution`) solves the h-equation only with the sign used here."""
+    E = jnp.linalg.inv(e) * jnp.asarray(ETA)[None, :]
+    g_up = [sum((E[mu, a] * GAMMA[a] for a in range(4)), 0 * GAMMA[0]) for mu in range(4)]
+    Om = [mv.bivector(Om_k[mu]) for mu in range(4)]
+    curvature = 0.0
+    for mu in range(4):
+        for nu in range(4):
+            R = mv.bivector(dOm_k[nu, :, mu] - dOm_k[mu, :, nu]) + commutator(Om[mu], Om[nu])
+            curvature = curvature + ((g_up[nu] ^ g_up[mu]) * R).restrict_grade(0).kernel.reshape(())
+    psi = even(psi_k)
+    kinetic = 0.0
+    for mu in range(4):
+        covariant = even(dpsi_k[:, mu]) + 0.5 * (Om[mu] * psi)
+        kinetic = kinetic + (g_up[mu] * covariant * I_STA * GAMMA[3] * ~psi).restrict_grade(0).kernel.reshape(())
+    dirac = kinetic - mass * (psi * ~psi).restrict_grade(0).kernel.reshape(())
+    return jnp.abs(jnp.linalg.det(e)) * (0.5 * curvature - kappa * dirac + cosmological)
+
+
+def field_equations(coframe, rotation_kernels, spinor, x4, mass, kappa, cosmological):
+    """(spinor [32], coframe [4, 4], connection [4, 15]): the Euler-Lagrange derivatives of `action_density` in psi,
+    e and Omega_mu at x4. h_bar and e are equivalent variables, so the coframe rows vanish exactly when LDG's
+    h-equation G(a) - Lambda a = kappa T(a) holds."""
+    x4 = jnp.asarray(x4, dtype=jnp.float64)
+
+    def fields(y):
+        return (coframe(y), rotation_kernels(y), jax.jacfwd(rotation_kernels)(y), spinor(y), jax.jacfwd(spinor)(y))
+
+    def local(*values):
+        return action_density(*values, mass, kappa, cosmological)
+
+    values = fields(x4)
+    direct = jax.grad(local, argnums=(0, 1, 3))(*values)
+
+    def momenta(y):
+        grads = jax.grad(local, argnums=(2, 4))(*fields(y))
+        return grads                                                   # (d L / d(d Omega) [4,15,nu], d L / d(d psi) [32,mu])
+
+    d_momenta = jax.jacfwd(momenta)(x4)
+    connection = direct[1] - jnp.einsum("kbnn->kb", d_momenta[0])
+    spinor_rows = direct[2] - jnp.einsum("ann->a", d_momenta[1])
+    return np.asarray(spinor_rows), np.asarray(direct[0]), np.asarray(connection)

@@ -91,4 +91,16 @@ transport changes in it.
 
 ## Status
 
-- Plan drafted; nothing implemented.
+- Phase 0: done (`tests/cldg_solution.py`; `gtg_dirac_reference.action_density`, `field_equations`;
+  `tests/test_cldg_solution.py`, 10 tests).
+  - The closed forms satisfy `ρ̇ = −3ρH`, `χ̇ = m cos β + 3πρ` and the constraint (1e-12), for particle and antiparticle
+    (regions (i) and (ii)). The thesis's χ came through the extraction garbled, so it is derived here:
+    `χ = ±mt − ½ ln(α coth αt ± m)`.
+  - The Newtonian-gauge rotation gauge field `H b∧γ₀` is LDG's closed form (4.53) for that h̄ (exact).
+  - The oracle's field equations are autodiff of LDG's action density in ψ, e and Ω_μ. With the contorsion
+    `(κ/2) b·S` all three vanish (1e-12), with and without the boost L. Without the contorsion, or with its sign
+    flipped, the h- and Ω-equations fail.
+  - The sign of Λ: with this R (de Sitter `R = −4Λ`), a repulsive Λ (`3H² = Λ` for de Sitter) enters the density as
+    `+Λ det(h)⁻¹`. LDG print `−Λ det(h)⁻¹` (4.36); the solution satisfies the h-equation only with `+Λ` (with `−Λ` it
+    misses by 2Λ). Phase 1 has to carry this into `Λ = 6(γ − 1/β)`.
+  - Not yet transcribed: region (iii) (the antiparticle bounce) and the extremal case `4m² = 3Λ`.
