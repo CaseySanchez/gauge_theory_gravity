@@ -17,7 +17,9 @@ with alpha = sqrt(3 Lambda) / 2 and s, c = sinh, cosh (alpha t):
     H   = alpha (alpha cosh 2 alpha t +- m sinh 2 alpha t) / (3 s (alpha c +- m s)),
     chi = +- m t - 1/2 ln(alpha coth(alpha t) +- m)      (derived here: chi' = +- m + 3 pi rho).
 
-Everything is a jax-traceable function of the coordinates x4 = (t, x, y, z), for the oracle's autodiff.
+Everything is a jax-traceable function of the coordinates x4 = (t, x, y, z), for the oracle's autodiff. The same
+fields in the CSTA (`geometry`, `csta_spinor`, `csta_connection`): the coframe e^0 = dt, e^i = dx^i - H x^i dt as the
+identity plus a dyad, Z = dirac.from_sta(psi), and Levi-Civita plus f plus LDG's contorsion.
 """
 from __future__ import annotations
 
@@ -26,7 +28,7 @@ from dataclasses import dataclass
 import jax.numpy as jnp
 import numpy as np
 
-from gauge_theory_gravity import algebra as al
+from gauge_theory_gravity import algebra as al, cartan, conformal as cf, dirac as dr
 
 mv = al.mv
 GAMMA = al.SPACETIME
@@ -106,3 +108,38 @@ class Cosmology:
                 value = value + (KAPPA / 2) * (leg * S).restrict_grade(2)
             rows.append(value.cast(al.Bivector).kernel)
         return jnp.stack(rows)
+
+    # --- the same fields in the CSTA, functions of a position --------------------------------------------------------
+    @staticmethod
+    def _time(position):
+        return cartan.coordinate(position, 0).kernel.reshape(())
+
+    def _shift(self, position):
+        """-H x, a spatial direction: e(d_t) = gamma_0 - H x."""
+        return -self.hubble(self._time(position)) * cartan.SpacePart(position)
+
+    def geometry(self):
+        """Identity plus the dyad shift * (t & Direction); the shift is spatial, so the frame is identity minus it."""
+        def coframe(position):
+            return al.Direction + self._shift(position) * (al.t & al.Direction)
+
+        def frame(position):
+            return al.Direction - self._shift(position) * (al.t & al.Direction)
+        return cartan.Geometry(coframe, frame)
+
+    def csta_spinor(self, position):
+        return dr.from_sta(self.spinor_multivector([self._time(position), 0.0, 0.0, 0.0]))
+
+    def csta_connection(self, special, torsion: float = 1.0):
+        """Levi-Civita, the coframe, the special-conformal field `special(position)`, and torsion * the LDG contorsion
+        1/2 kappa g_mu . S, with S = dirac.spin_trivector(Z)."""
+        geometry = self.geometry()
+        base = cf.connection(geometry, special)
+
+        def omega(position):
+            connection = base(position)
+            spin = dr.spin_trivector(self.csta_spinor(position))
+            legs = dr.coframe_of(connection)(al.DIRECTIONS).dual_inverse()                # [4] Vector, g_mu
+            return connection + sum(((0.5 * KAPPA * torsion * (legs[mu] * spin).restrict_grade(2)).cast(al.Bivector)
+                                     * (al.SLICES[mu] & al.Direction) for mu in range(4)), 0 * connection)
+        return omega

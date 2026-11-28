@@ -104,3 +104,15 @@ transport changes in it.
     `+Λ det(h)⁻¹`. LDG print `−Λ det(h)⁻¹` (4.36); the solution satisfies the h-equation only with `+Λ` (with `−Λ` it
     misses by 2Λ). Phase 1 has to carry this into `Λ = 6(γ − 1/β)`.
   - Not yet transcribed: region (iii) (the antiparticle bounce) and the extremal case `4m² = 3Λ`.
+- Phase 1: done (`Cosmology.geometry`, `csta_spinor`, `csta_connection` in `tests/cldg_solution.py`;
+  `tests/test_cldg_csta.py`, 5 tests, about 5 minutes).
+  - The Newtonian-gauge coframe is `e^0 = dt`, `e^i = dx^i − H x^i dt`: identity plus the dyad `−H x (t & Direction)`,
+    inverted in closed form like Painlevé–Gullstrand, and equal to the oracle's.
+  - With `f = e/β`, `γ = Λ/6 + 1/β`, κ = 8π, the Lorentz coupling, and Levi-Civita plus LDG's contorsion, all 60
+    connection rows and the 8 spinor rows of `S₁ + βS₂ + γS₃ + 4κ|det e|L_D` vanish (1e-13; 1e-15 seen). This holds
+    for the particle (β = 4), the antiparticle (β = 2) and the boosted particle (β = −1), at different events. The
+    matter rows are O(1–15) in the M and P sectors, and zero in K and D (the Lorentz coupling does not source f).
+  - Without the contorsion the M and P rows fail by O(5) and the spinor rows by O(0.4).
+  - So both normalizations hold against an independent self-consistent solution: the `4κ` coupling, and
+    `Λ = 6(γ − 1/β)` with Λ repulsive.
+  - Region (iii) and the extremal case are still not transcribed (Phase 0), so they are not checked here.
